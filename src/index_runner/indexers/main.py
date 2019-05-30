@@ -1,6 +1,9 @@
 """
 Indexer logic based on type
 """
+import sys
+import json
+from confluent_kafka import Producer
 from kbase_workspace_client import WorkspaceClient
 from kbase_workspace_client.exceptions import WorkspaceResponseError
 
@@ -14,6 +17,9 @@ from .assembly import index_assembly
 from .tree import index_tree
 from .taxon import index_taxon
 from .pangenome import index_pangenome
+
+_CONFIG = get_config()
+_PRODUCER = Producer({'bootstrap.servers': _CONFIG['kafka_server']})
 
 
 def index_obj(msg_data):
@@ -49,6 +55,18 @@ def index_obj(msg_data):
     except WorkspaceResponseError as err:
         print('Workspace response error:', err.resp_data)
         raise err
+    # If the object is not a narrative, then send an event to reindex the parent narrative.
+    if type_name != 'Narrative':
+        # Produce an event to the admin indexer topic to reindex the narrative
+        _PRODUCER.produce(
+            config['topics']['indexer_admin_events'],
+            json.dumps({
+                'evtype': 'REINDEX_NARRATIVE',
+                'workspace_id': int(msg_data['wsid'])
+            }),
+            callback=_delivery_report
+        )
+        _PRODUCER.poll(60)
     # Get the info of the first object to get the origin creation date of the
     # object.
     try:
@@ -260,3 +278,11 @@ _TYPE_BLACKLIST = [
     "KBaseNetworks.Network",
     "KBaseSequences.SequenceSet"
 ]
+
+
+def _delivery_report(err, msg):
+    """Kafka producer callback."""
+    if err is not None:
+        sys.stderr.write(f'Message delivery failed for "{msg.key()}" in {msg.topic()}: {err}\n')
+    else:
+        print(f'Message "{msg.key()}" delivered to {msg.topic()}')

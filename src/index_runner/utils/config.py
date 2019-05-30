@@ -1,8 +1,10 @@
+import functools
 import urllib.request
 import yaml
 import os
 
 
+@functools.lru_cache(maxsize=2)
 def get_config():
     """
     Initialize configuration data.

@@ -14,7 +14,8 @@ from .indexers.indexer_utils import (
     check_object_deleted,
     check_workspace_deleted,
     fetch_objects_in_workspace,
-    is_workspace_public
+    is_workspace_public,
+    get_narrative_in_ws
 )
 
 _CONFIG = get_config()
@@ -29,7 +30,7 @@ def main():
         _CONFIG['topics']['workspace_events'],
         _CONFIG['topics']['indexer_admin_events']
     ]
-    pool = concurrent.futures.ThreadPoolExecutor(max_workers=10)
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=100)
     for msg_data in kafka_consumer(topics):
         pool.submit(_process_event, msg_data)
 
@@ -194,7 +195,7 @@ def _set_global_permission(msg_data):
     """
     # Check what the permission is on the workspace
     workspace_id = msg_data['wsid']
-    is_public = is_workspace_public(workspace_id, _CONFIG)
+    is_public = is_workspace_public(workspace_id)
     print(f"producing 'set_global_perm' to {_CONFIG['topics']['elasticsearch_updates']}")
     _PRODUCER.produce(
         _CONFIG['topics']['elasticsearch_updates'],
@@ -205,10 +206,25 @@ def _set_global_permission(msg_data):
     _PRODUCER.poll(60)
 
 
-# Handler functions for each event type ('evtype' key)
+def _reindex_narrative(msg_data):
+    """
+    Reindex the narrative for a workspace. This only requires msg_data['wsid'].
+    """
+    obj_info = get_narrative_in_ws(int(msg_data['wsid']))
+    msg_data['objid'] = obj_info[0]
+    _run_indexer(msg_data)
+
+
+# Handler functions for each event time for the indexer admin topic (based on 'evtype' key)
+indexer_admin_event_handlers = {
+    'REINDEX_NARRATIVE': _reindex_narrative,
+    'REINDEX': _run_indexer
+}
+
+
+# Handler functions for each event type from the workspace ('evtype' key)
 workspace_event_type_handlers = {
     'NEW_VERSION': _run_indexer,
-    'REINDEX': _run_indexer,
     'OBJECT_DELETE_STATE_CHANGE': _run_obj_deleter,
     'WORKSPACE_DELETE_STATE_CHANGE': _run_workspace_deleter,
     'COPY_OBJECT': _run_indexer,
@@ -218,7 +234,8 @@ workspace_event_type_handlers = {
 }
 
 event_type_handlers = {
-    **workspace_event_type_handlers
+    **workspace_event_type_handlers,
+    **indexer_admin_event_handlers
 }
 
 
