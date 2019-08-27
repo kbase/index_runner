@@ -1,3 +1,8 @@
+"""
+Takes workspace kafka event data and generates new Elasticsearch index upates
+(creations, updates, deletes, etc)
+Pushes work to es_writer.
+"""
 import time
 import json
 import hashlib
@@ -23,6 +28,7 @@ class ESIndexer:
 
     @classmethod
     def init_children(cls):
+        """Initialize a worker group of ESWriters, which we push work into."""
         es_writers = WorkerGroup(ESWriter, (), count=_CONFIG['zmq']['num_es_writers'])
         return {'es_writers': es_writers}
 

@@ -77,4 +77,4 @@ def _report_err(err):
     print(err)
     print('-' * 80)
     traceback.print_exc()
-    print('-' * 80)
+    print('=' * 80)

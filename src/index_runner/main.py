@@ -29,8 +29,7 @@ def main():
     """
     # Wait for elasticsearch to be live
     _wait_for_es()
-    # Initialize group of es_indexers
-    print('starting es_indexers')
+    # Initialize worker group of ESIndexer
     es_indexers = WorkerGroup(ESIndexer, (), count=_CONFIG['zmq']['num_es_indexers'])
     # All worker groups to send kafka messages to
     receivers = [es_indexers]
@@ -66,10 +65,8 @@ def main():
         except ValueError as err:
             print(f'JSON parsing error: {err}')
             print(f'Message content: {val}')
-        print(f'pushing to receivers..')
         for receiver in receivers:
             receiver.queue.put(data)
-        print(f'.. queue is {receiver.queue} len {receiver.queue.qsize()}')
 
 
 def _wait_for_es():

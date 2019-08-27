@@ -25,6 +25,7 @@ _ALIASES = _CONFIG['global']['aliases']
 class ESWriter:
     # Timeout receiving a message after 5s
     timeout_ms = 5000
+    # Minimum amount of ES updates before we perform a batch operation
     batch_min = 10000
 
     def __init__(self):

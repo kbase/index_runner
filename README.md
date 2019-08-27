@@ -1,6 +1,6 @@
 # KBase Knowledge Engine
 
-This is a background service that listens to events from the KBase Workspace and automatically generates graph data and search indexes to enrich the workspace objects.
+This is a background service that listens to events from the KBase Workspace and automatically generates graph data and search indexes to enrich the workspace object data.
 
 ## Development
 
