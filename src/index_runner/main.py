@@ -12,6 +12,7 @@ import time
 import requests
 import json
 from confluent_kafka import Consumer, KafkaError
+
 from src.utils.config import get_config
 from src.utils.worker_group import WorkerGroup
 from src.index_runner.es_indexer import ESIndexer
