@@ -14,15 +14,11 @@ Some standard class attrs you can set:
         instance as `inst.children`, which is a dictionary of {name: worker_group_queue}.
         This way, your parent worker group can initialize child worker groups
         and send messages to them from within your methods.
-    `timeout_ms` - class attribute integer of milliseconds to timeout waiting
-        for a message from the queue. When we hit this timeout, we run the
-        `timeout` method of the class, if present.
-    `timeout` - method to call when the timeout is reached waiting for a message
+    `on_queue_empty` - method that runs when the worker's queue goes empty.
 """
 import traceback
 from dataclasses import dataclass
 from typing import Tuple, Callable
-from queue import Empty
 from multiprocessing import Process, Queue
 
 
@@ -73,33 +69,25 @@ def _run_worker(cls, args, queue, child_queues):
     inst.children = {}
     for (worker_name, child_queue) in child_queues.items():
         inst.children[worker_name] = child_queue
-    # Set a timeout in milliseconds for receiving messages, if present
-    try:
-        timeout = inst.timeout_ms / 1000
-    except AttributeError:
-        timeout = None
+    has_on_queue_empty = hasattr(inst, 'on_queue_empty') and callable(inst.on_queue_empty)
     while True:
+        # Every item in the queue is a pair (method_name, method_data)
+        (meth_name, msg_data) = queue.get()
         try:
-            # Every item in the queue is a pair (method_name, method_data)
-            (meth_name, msg_data) = queue.get(block=True, timeout=timeout)
+            # Find the method and run it in the worker
+            if hasattr(inst, meth_name) and callable(getattr(inst, meth_name)):
+                meth = getattr(inst, meth_name)
+                meth(msg_data)
+            else:
+                # Method not found
+                raise RuntimeError(f"{cls.__name__} does not have a method '{meth_name}'")
+        except Exception as err:
+            _report_err(err)
+        if queue.empty() and has_on_queue_empty:
             try:
-                # Find the method and run it in the worker
-                if hasattr(inst, meth_name) and callable(getattr(inst, meth_name)):
-                    meth = getattr(inst, meth_name)
-                    meth(msg_data)
-                else:
-                    # Method not found
-                    raise RuntimeError(f"{cls.__name__} does not have a method '{meth_name}'")
+                inst.on_queue_empty()
             except Exception as err:
                 _report_err(err)
-        except Empty:
-            # We've hit the timeout
-            # If inst has a .timeout method, then run it
-            if hasattr(inst, 'timeout') and callable(inst.timeout):
-                try:
-                    inst.timeout()
-                except Exception as err:
-                    _report_err(err)
 
 
 def _report_err(err):

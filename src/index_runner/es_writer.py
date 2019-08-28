@@ -23,8 +23,6 @@ _ALIASES = _CONFIG['global']['aliases']
 
 
 class ESWriter:
-    # Timeout receiving a message after 5s
-    timeout_ms = 5000
     # Minimum amount of ES updates before we perform a batch operation
     batch_min = 10000
 
@@ -44,7 +42,7 @@ class ESWriter:
                 'props': {**mapping['properties'], **global_mappings}
             })
 
-    def timeout(self):
+    def on_queue_empty(self):
         """
         Runs on a 5s timeout receiving a message.
         Perform our built-up batch operations while we're idle.
