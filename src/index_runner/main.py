@@ -66,7 +66,7 @@ def main():
             print(f'JSON parsing error: {err}')
             print(f'Message content: {val}')
         for receiver in receivers:
-            receiver.queue.put(data)
+            receiver.queue.put(('ws_event', data))
 
 
 def _wait_for_es():

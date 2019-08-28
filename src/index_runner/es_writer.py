@@ -38,55 +38,60 @@ class ESWriter:
             if mapping.get('global_mappings'):
                 for g_map in mapping['global_mappings']:
                     global_mappings.update(_GLOBAL_MAPPINGS[g_map])
-            self._init_index({
+            self.init_index({
                 'name': index,
                 'alias': _ALIASES.get(index),
                 'props': {**mapping['properties'], **global_mappings}
             })
 
     def timeout(self):
-        """Runs on a 5s timeout receiving a message."""
-        self._perform_batch_ops()
+        """
+        Runs on a 5s timeout receiving a message.
+        Perform our built-up batch operations while we're idle.
+        """
+        self._perform_batch_writes(min_length=1)
+        self._perform_batch_deletes(min_length=1)
 
-    def receive(self, msg):
+    def delete(self, data):
         """
-        Receive a JSON message from es_indexer
-        Message event/action name should go in msg._action.
+        Handle a delete action.
+        Data is a dict with fields for 'workspace_id' (int) and 'object_id' (int)
         """
-        if not msg.get('_action'):
-            print(f"Message to elasticsearch writer missing `_action` field: {msg}")
-            return
-        action = msg['_action']
-        if action == 'delete':
-            self.batch_deletes.append(msg)
-        elif action == 'index':
-            self.batch_writes.append(msg)
-        elif action == 'init_index':
-            self._init_index(msg)
-        elif action == 'init_generic_index':
-            self._init_generic_index(msg)
-        elif action == 'set_global_perm':
-            self._set_global_perm(msg)
-        self._perform_batch_ops(min_length=self.batch_min)
+        self.batch_deletes.append(data)
+        self._perform_batch_deletes(min_length=self.batch_min)
 
-    def _perform_batch_ops(self, min_length=1):
+    def index(self, data):
         """
-        Perform all the batch writes and deletes and empty the lists.
+        Handle an index action.
+        Data is a dict with fields for 'index' (index name), 'id' (ES id), and 'doc' (ES data)
+        """
+        self.batch_writes.append(data)
+        self._perform_batch_writes(min_length=self.batch_min)
+
+    def _perform_batch_writes(self, min_length=1):
+        """
+        Perform all the batch writes and empty the batch_writes list.
         Runs after 5s of inactivity or if the batch ops reach a min length.
         """
-        # Only perform batch ops at most once every `self.batch_interval` seconds
         write_len = len(self.batch_writes)
-        delete_len = len(self.batch_deletes)
         if write_len >= min_length:
             _write_to_elastic(self.batch_writes)
             self.batch_writes = []
             print(f"es_writer wrote {write_len} documents to elasticsearch.")
+
+    def _perform_batch_deletes(self, min_length=1):
+        """
+        Perform all the batch deletes and empty the batch_deletes list.
+        Runs after 5s of inactivity or if the batch ops reach a min length.
+        """
+        # Only perform batch ops at most once every `self.batch_interval` seconds
+        delete_len = len(self.batch_deletes)
         if delete_len >= min_length:
             _delete_from_elastic(self.batch_deletes)
             self.batch_deletes = []
             print(f"es_writer deleted {delete_len} documents from elasticsearch.")
 
-    def _init_index(self, msg):
+    def init_index(self, msg):
         """
         Initialize an index on elasticsearch if it doesn't already exist.
         Message fields:
@@ -108,7 +113,7 @@ class ESWriter:
             status = _create_alias(alias_name, index_name)
             print(f"es_writer Alias {alias_name} for index {index_name} created.")
 
-    def _set_global_perm(self, msg):
+    def set_global_perm(self, msg):
         """
         Make all objects in a certain workspace either all public or all private.
         """
@@ -120,7 +125,7 @@ class ESWriter:
             _CONFIG
         )
 
-    def _init_generic_index(self, msg):
+    def init_generic_index(self, msg):
         """
         Initialize an index from a workspace object indexed by the generic indexer.
         For example, when the generic indexer gets a type like Module.Type-4.0,
@@ -130,7 +135,7 @@ class ESWriter:
         """
         (module_name, type_name, type_ver) = get_type_pieces(msg['full_type_name'])
         index_name = type_name.lower()
-        self._init_index({
+        self.init_index({
             'name': index_name + ':0',
             'props': _GLOBAL_MAPPINGS['ws_object']
         })
