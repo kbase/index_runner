@@ -1,4 +1,6 @@
 """
+Take object info from the workspace and import various vertices and edges into Arangodb.
+
 wsfull_object (unversioned)
     workspace_id
     object_id

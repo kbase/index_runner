@@ -46,8 +46,6 @@ def admin_req(method, params):
 def _post_req(payload):
     """Make a post request to the workspace server and process the response."""
     headers = {'Authorization': _CONFIG['ws_token']}
-    print('posting', payload)
-    print('headers', headers)
     resp = requests.post(_CONFIG['workspace_url'], data=json.dumps(payload), headers=headers)
     if not resp.ok:
         raise RuntimeError('Error response from workspace:\n%s' % resp.text)
