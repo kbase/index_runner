@@ -147,6 +147,16 @@ class TestIntegration(unittest.TestCase):
         )
         self.assertTrue(prov_edge2)
 
+    def test_import_nonexistent_existing(self):
+        """Test an IMPORT_NONEXISTENT event."""
+        _produce({'evtype': 'IMPORT_NONEXISTENT', 'wsid': 41347, 'objid': 6, 'ver': 1})
+        admin_topic = _CONFIG['topics']['admin_events']
+        obj_doc1 = _wait_for_re_doc('wsfull_object', '41347:6')
+        self.assertEqual(obj_doc1['object_id'], 6)
+        _produce({'evtype': 'IMPORT_NONEXISTENT', 'wsid': 41347, 'objid': 5, 'ver': 1}, admin_topic)
+        obj_doc2 = _wait_for_re_doc('wsfull_object', '41347:6')
+        self.assertEqual(obj_doc1['_rev'], obj_doc2['_rev'])
+
 
 # -- Test utils
 
