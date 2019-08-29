@@ -77,6 +77,3 @@ def _set_global_perms(msg):
     """Set permissions for an entire workspace (SET_GLOBAL_PERMISSION)."""
     print('_set_global_perms TODO')  # TODO
     raise NotImplementedError()
-
-
-# -- Utils
