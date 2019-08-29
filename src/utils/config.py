@@ -7,10 +7,10 @@ import functools
 @functools.lru_cache(maxsize=2)
 def get_config():
     """Initialize configuration data from the environment."""
-    if not os.environ.get('WORKSPACE_TOKEN'):
-        raise RuntimeError('WORKSPACE_TOKEN env var is not set.')
-    if not os.environ.get('MOUNT_DIR'):
-        raise RuntimeError('MOUNT_DIR env var is not set')
+    reqs = ['WORKSPACE_TOKEN', 'RE_API_TOKEN', 'MOUNT_DIR']
+    for req in reqs:
+        if not os.environ.get(req):
+            raise RuntimeError(f'{req} env var is not set.')
     es_host = os.environ.get("ELASTICSEARCH_HOST", 'elasticsearch')
     es_port = os.environ.get("ELASTICSEARCH_PORT", 9200)
     kbase_endpoint = os.environ.get('KBASE_ENDPOINT', 'https://ci.kbase.us/services').strip('/')
@@ -44,6 +44,7 @@ def get_config():
         'catalog_url': catalog_url,
         'workspace_url': workspace_url,
         're_api_url': re_api_url,
+        're_api_token': os.environ['RE_API_TOKEN'],
         'elasticsearch_host': es_host,
         'elasticsearch_port': es_port,
         'elasticsearch_url': f"http://{es_host}:{es_port}",
