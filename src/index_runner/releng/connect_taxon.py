@@ -45,7 +45,7 @@ def create_taxon_edge(obj_ver_key, obj_info_tup):
         print('No lineage in object; skipping..')
         return
     lineage = resp['data'][0]['data']['taxonomy'].split('; ')
-    nonalpha = r'[^a-zA-Z]'
+    nonalpha = r'[^a-zA-Z ]'
     # Get the species or strain name, and filter out any non-alphabet chars
     most_specific = re.sub(nonalpha, '', lineage[-1])
     # Search by scientific name via the RE API
@@ -64,9 +64,9 @@ def create_taxon_edge(obj_ver_key, obj_info_tup):
     match = adb_results['results'][0]
     # Create an edge from the ws_object_ver to the taxon
     tax_key = match['_key']
-    wsid = obj_info_tup[0]
-    objid = obj_info_tup[1]
-    ver = obj_info_tup[2]
+    wsid = obj_info_tup[6]
+    objid = obj_info_tup[0]
+    ver = obj_info_tup[4]
     from_id = f"{_OBJ_VER_COLL}/{wsid}:{objid}:{ver}"
     to_id = f"{_TAX_VER_COLL}/{tax_key}"
     print(f'Creating taxon edge from {from_id} to {to_id}')
