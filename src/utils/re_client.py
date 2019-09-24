@@ -130,6 +130,8 @@ def save(coll_name, docs, on_duplicate='update', display_errors=False):
             'error'.
         display_errors - include error information if insert errors occur.
     """
+    if not isinstance(docs, list) and isinstance(docs, dict):
+        docs = [docs]
     url = config()['re_api_url'] + '/api/v1/documents'
     # convert the docs into a string, where each obj is separated by a linebreak
     payload = '\n'.join([json.dumps(d) for d in docs])
