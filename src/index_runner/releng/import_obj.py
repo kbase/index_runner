@@ -189,8 +189,14 @@ def _save_type_vertex(obj_type):
     (type_module, type_name, type_ver) = get_type_pieces(obj_type)
     (maj_ver, min_ver) = [int(v) for v in type_ver.split('.')]
     print(f'Saving ws_type_version, ws_type, and ws_type_module for {obj_type}')
-    save('ws_type_version', {'_key': obj_type})
-    save('ws_type', {'_key': f'{type_module}.{type_name}'})
+    save('ws_type_version', {
+        '_key': obj_type,
+        'type_name': type_name,
+        'module_name': type_module,
+        'maj_ver': maj_ver,
+        'min_ver': min_ver
+    })
+    save('ws_type', {'_key': f'{type_module}.{type_name}', 'type_name': type_name, 'module_name': type_module})
     save('ws_type_module', {'_key': type_module})
 
 
