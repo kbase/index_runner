@@ -219,9 +219,21 @@ class TestRelEngImportObject(unittest.TestCase):
             'ws_type_version/KBaseGenomes.Genome-15.1'  # to
         )
         # Check for type vertices
-        self.assertTrue(get_re_doc('ws_type_version', obj_type))
-        self.assertTrue(get_re_doc('ws_type', f"{type_module}.{type_name}"))
-        self.assertTrue(get_re_doc('ws_type_module', type_module))
+        self.assertDictContainsSubset({
+            '_key': 'KBaseGenomes.Genome-15.1',
+            'module_name': 'KBaseGenomes',
+            'type_name': 'Genome',
+            'maj_ver': 15,
+            'min_ver': 1
+        }, get_re_doc('ws_type_version', obj_type))
+        self.assertDictContainsSubset({
+            '_key': 'KBaseGenomes.Genome',
+            'module_name': 'KBaseGenomes',
+            'type_name': 'Genome'
+        }, get_re_doc('ws_type', f"{type_module}.{type_name}"))
+        self.assertDictContainsSubset({
+            '_key': 'KBaseGenomes'
+        }, get_re_doc('ws_type_module', type_module))
         self.assertTrue(type_edge)
         # Check for the ws_owner_of edge
         owner_edge = get_re_edge(
