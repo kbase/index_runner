@@ -146,11 +146,10 @@ def _save_workspace(obj_info_tup):
     """Save the ws_workspace vertex given an object info tuple."""
     workspace_client = WorkspaceClient(url=config()['kbase_endpoint'], token=config()['ws_token'])
     wsid = obj_info_tup[0]
-    print(f"OBJECT INFO! {wsid}   {obj_info_tup}")
-    print(f"GETTING WSINFO FOR {wsid}")
     ws_info = workspace_client.admin_req('getWorkspaceInfo', {"id": wsid})
-    #  0  1    2     3       4        5          6          7        8
-    # [id,name,owner,moddate,maxobjid,user_perms,globalread,lockstat,metadata]
+    # Workspace info tuple is as follows:
+    #    0  1    2     3       4        5          6          7        8
+    #   [id,name,owner,moddate,maxobjid,user_perms,globalread,lockstat,metadata]
     metadata = ws_info[-1]
     print(f'Saving workspace vertex {wsid}')
     save('ws_workspace', {
