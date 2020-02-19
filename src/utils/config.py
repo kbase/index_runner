@@ -44,11 +44,13 @@ def get_config():
         raise RuntimeError(f"Invalid global github release url: {github_release_url}")
     gh_token = os.environ.get('GITHUB_TOKEN')
     global_config = _fetch_global_config(config_url, github_release_url, gh_token)
-    skip_indices = set(os.environ.get('SKIP_INDICES', '').split(','))
+    skip_indices = {s for s in os.environ.get('SKIP_INDICES', '').split(',') if s}
+    allow_indices = {s for s in os.environ.get('ALLOW_INDICES', '').split(',') if s}
     return {
         'skip_releng': os.environ.get('SKIP_RELENG'),
         'skip_features': os.environ.get('SKIP_FEATURES'),
         'skip_indices': skip_indices,
+        'allow_indices': allow_indices,
         'global': global_config,
         'github_release_url': github_release_url,
         'github_token': gh_token,
