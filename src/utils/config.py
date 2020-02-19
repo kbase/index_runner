@@ -44,8 +44,8 @@ def get_config():
         raise RuntimeError(f"Invalid global github release url: {github_release_url}")
     gh_token = os.environ.get('GITHUB_TOKEN')
     global_config = _fetch_global_config(config_url, github_release_url, gh_token)
-    skip_indices = {s for s in os.environ.get('SKIP_INDICES', '').split(',') if s}
-    allow_indices = {s for s in os.environ.get('ALLOW_INDICES', '').split(',') if s}
+    skip_indices = _get_comma_delimited_env('SKIP_INDICES')
+    allow_indices = _get_comma_delimited_env('ALLOW_INDICES')
     return {
         'skip_releng': os.environ.get('SKIP_RELENG'),
         'skip_features': os.environ.get('SKIP_FEATURES'),
@@ -103,3 +103,15 @@ def _fetch_global_config(config_url, github_release_url, gh_token):
                 with urllib.request.urlopen(download_url) as res:  # nosec
                     return yaml.safe_load(res)
         raise RuntimeError("Unable to load the config.yaml file from index_runner_spec")
+
+
+def _get_comma_delimited_env(key):
+    """
+    Fetch a comma-delimited list of strings from an environment variable as a set.
+    """
+    ret = set()
+    for piece in os.environ.get(key, '').split(','):
+        piece = piece.strip()
+        if piece:
+            ret.add(piece)
+    return ret
