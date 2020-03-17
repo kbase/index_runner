@@ -1,0 +1,24 @@
+version: "3"
+
+# This docker-compose is for developer convenience, not for running in production.
+
+services:
+  # For running the python consumers
+  app:
+    build:
+      context: ..
+      args:
+        DEVELOPMENT: 1
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../${PWD}:/app
+      - ../${PWD}/scratch:/scratch
+    # environment:
+    #   - KBASE_ENDPOINT=http://mock_kbase_services:5000/
+    #   - DEVELOPMENT=1
+    #   - PYTHONUNBUFFERED=true
+    #   - RE_URL=http://re_api:5000
+    #   - WORKSPACE_TOKEN=valid_admin_token
+    #   - RE_API_TOKEN=valid_admin_token
