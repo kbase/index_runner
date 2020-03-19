@@ -22,10 +22,16 @@ def config(force_reload=False):
 @functools.lru_cache(maxsize=1)
 def get_config():
     """Initialize configuration data from the environment."""
-    reqs = ['WORKSPACE_TOKEN', 'RE_API_TOKEN']
+    is_ws_admin = _get_boolean_env_var('WS_ADMIN', True)
+
+    # Required environment variables
+    reqs = ['WORKSPACE_TOKEN']
+    if not _get_boolean_env_var('SKIP_RELENG', False):
+        reqs.append('RE_API_TOKEN')
     for req in reqs:
         if not os.environ.get(req):
             raise RuntimeError(f'{req} env var is not set.')
+
     es_host = os.environ.get("ELASTICSEARCH_HOST", 'elasticsearch')
     es_port = os.environ.get("ELASTICSEARCH_PORT", 9200)
     kbase_endpoint = os.environ.get('KBASE_ENDPOINT', 'https://ci.kbase.us/services').strip('/')
@@ -38,6 +44,9 @@ def get_config():
         'https://api.github.com/repos/kbase/index_runner_spec/releases/latest'
     )
     # Load the global configuration release (non-environment specific, public config)
+    # TODO: remove code, leaving for now for inspection; since we now support loading the
+    # specs from a local file, this check is too narrow.
+    # TODO: should simply enhance to check whether the file exists or it is a url
     if config_url and not config_url.startswith('http'):
         raise RuntimeError(f"Invalid global config url: {config_url}")
     if not github_release_url.startswith('http'):
@@ -61,7 +70,7 @@ def get_config():
         'catalog_url': catalog_url,
         'workspace_url': workspace_url,
         're_api_url': re_api_url,
-        're_api_token': os.environ['RE_API_TOKEN'],
+        're_api_token': os.environ.get('RE_API_TOKEN'),
         'elasticsearch_host': es_host,
         'elasticsearch_port': es_port,
         'elasticsearch_url': f"http://{es_host}:{es_port}",
@@ -75,7 +84,31 @@ def get_config():
         },
         'config_timeout': 600,  # 10 minutes in seconds.
         'last_config_reload': time.time(),
+        'ws_admin': is_ws_admin,
+        'max_object_size': _get_int_env_var('MAX_OBJECT_SIZE', None)
     }
+
+
+def _get_int_env_var(name, default_value):
+    raw_value = os.environ.get(name, None)
+    if raw_value is None:
+        return default_value
+    try:
+        return int(raw_value)
+    except Exception as e:
+        raise ValueError(f'Environment variable {name} not a valid integer value: {str(e)}')
+
+
+def _get_boolean_env_var(name, default_value):
+    raw_value = os.environ.get(name, None)
+    if raw_value is None:
+        return default_value
+    if raw_value in ['1', 'true', 't', 'yes', 'y']:
+        return True
+    elif raw_value in ['0', 'false', 'f', 'no', 'n']:
+        return False
+    else:
+        raise ValueError(f'Environment variable {name} not a valid boolean value')
 
 
 def _fetch_global_config(config_url, github_release_url, gh_token):
@@ -84,7 +117,14 @@ def _fetch_global_config(config_url, github_release_url, gh_token):
     using either the direct URL to the file or by querying the repo's release
     info using the GITHUB API.
     """
-    if config_url:
+    if (os.path.exists('/app/config/config.yaml')):
+        with open('/app/config/config.yaml') as config_file:
+            config_contents = config_file.read()
+            the_config = yaml.safe_load(config_contents)
+            # print('the config?')
+            # print(the_config)
+            return the_config
+    elif config_url:
         print('Fetching config from the direct url')
         # Fetch the config directly from config_url
         with urllib.request.urlopen(config_url) as res:  # nosec
