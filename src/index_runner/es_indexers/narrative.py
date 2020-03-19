@@ -2,6 +2,7 @@ import sys
 from bs4 import BeautifulSoup
 from markdown2 import Markdown
 import logging
+from datetime import datetime
 
 from src.utils.get_path import get_path
 from src.index_runner.es_indexers import indexer_utils
@@ -14,7 +15,27 @@ _NARRATIVE_INDEX_VERSION = 1
 _NARRATIVE_INDEX_NAME = 'narrative_' + str(_NARRATIVE_INDEX_VERSION)
 
 
-def index_narrative(obj_data, ws_info, obj_data_v1):
+def _get_is_temporary(ws_metadata):
+    is_temporary_string = ws_metadata.get('is_temporary')
+    if is_temporary_string is not None:
+        if is_temporary_string == 'true':
+            return True
+        else:
+            return False
+
+
+def _get_is_narratorial(ws_metadata):
+    if ws_metadata.get('narratorial') == '1':
+        return True
+    else:
+        return False
+
+
+def iso8601_to_epoch(time_string):
+    return round(datetime.strptime(time_string, '%Y-%m-%dT%H:%M:%S%z').timestamp())
+
+
+def index_narrative(obj_data, ws_info, obj_info_v1):
     """
     Index a narrative object on save.
     We index the latest narratives for:
@@ -25,15 +46,66 @@ def index_narrative(obj_data, ws_info, obj_data_v1):
         - total number of cells
     """
     obj_info = obj_data['info']
-    obj_id = obj_info[0]
-    workspace_id = obj_data['info'][6]
-    ws_id = obj_info[6]
-    # Get all the types and names of objects in the narrative's workspace.
-    narrative_data_objects = indexer_utils.fetch_objects_in_workspace(ws_id)
+    [obj_id, obj_name, _, _, _, _, _, _, _, _, obj_metadata] = obj_info
+    [workspace_id, _, owner, moddate, _, _, global_permission, _, ws_metadata] = ws_info
+
+    if obj_metadata is None:
+        yield {
+            '_action': 'error',
+            'message': 'No object metadata for Narrative'
+        }
+    elif ws_metadata is None:
+        yield {
+            '_action': 'error',
+            'message': 'No workspace metadata for Narrative'
+        }
+    else:
+        is_temporary = _get_is_temporary(ws_metadata)
+
+        if is_temporary is None:
+            logger.error(f'No temporary metadata field for Narrative {workspace_id}')
+            yield {
+                '_action': 'error',
+                'message': 'No temporary metadata field for Narrative'
+            }
+        else:
+            creator = obj_data['creator']
+
+            # however, the narratorial metadata field stores boolean as the strings "1"
+            # (the "0" case is not stored)
+            is_narratorial = _get_is_narratorial(ws_metadata)
+
+            narrative_title = obj_metadata.get('name')
+
+            # Get all the types and names of objects in the narrative's workspace.
+            narrative_data_objects = indexer_utils.fetch_objects_in_workspace(workspace_id)
+
+            raw_cells = obj_data['data'].get('cells', [])
+            cells = extract_cells(raw_cells, workspace_id)
+
+            doc = {
+                '_action': 'index',
+                'doc': {
+                    'narrative_title': narrative_title,
+                    'is_temporary': is_temporary,
+                    'is_narratorial': is_narratorial,
+                    'creator': creator,
+                    'owner': owner,
+                    'modified_at': iso8601_to_epoch(moddate),
+                    'cells': cells,
+                    'data_objects': narrative_data_objects,
+                    'total_cells': len(cells),
+                    # 'silly_extra_field': 'sillyness'
+                },
+                'index': _NARRATIVE_INDEX_NAME,
+                'id': f'{_NAMESPACE}::{workspace_id}:{obj_id}',
+            }
+            yield doc
+
+
+def extract_cells(cells, workspace_id):
     index_cells = []
-    logger.debug(f'obj_data is {obj_data}')
-    cells = obj_data['data'].get('cells', [])
-    creator = obj_data['creator']
+
     for cell in cells:
         if cell.get('cell_type') == 'markdown':
             if not cell.get('source'):
@@ -57,21 +129,8 @@ def index_narrative(obj_data, ws_info, obj_data_v1):
             sys.stderr.write('\n' + ('-' * 80) + '\n')
             index_cell = {'desc': 'Narrative Cell', 'cell_type': 'unknown'}
         index_cells.append(index_cell)
-    metadata = obj_info[-1] or {}  # last elem of obj info is a metadata dict
-    narrative_title = metadata.get('name')
-    result = {
-        '_action': 'index',
-        'doc': {
-            'narrative_title': narrative_title,
-            'data_objects': narrative_data_objects,
-            'cells': index_cells,
-            'creator': creator,
-            'total_cells': len(cells),
-        },
-        'index': _NARRATIVE_INDEX_NAME,
-        'id': f'{_NAMESPACE}::{workspace_id}:{obj_id}',
-    }
-    yield result
+
+    return index_cells
 
 
 def _process_code_cell(cell):
