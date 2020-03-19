@@ -2,11 +2,10 @@
 Indexer logic based on type
 """
 import logging
-from kbase_workspace_client import WorkspaceClient
-from kbase_workspace_client.exceptions import WorkspaceResponseError
+import src.utils.ws_utils as ws_utils
+import src.utils.kafka_utils as kafka_utils
 
 from src.utils.config import config
-from src.utils import ws_utils
 from src.index_runner.es_indexers import indexer_utils
 from src.index_runner.es_indexers.narrative import index_narrative
 from src.index_runner.es_indexers.reads import index_reads
@@ -20,10 +19,9 @@ from src.index_runner.es_indexers.annotated_metagenome_assembly import index_ann
 from src.utils.get_upa_from_msg import get_upa_from_msg_data
 
 logger = logging.getLogger('IR')
-ws_client = WorkspaceClient(url=config()['kbase_endpoint'], token=config()['ws_token'])
 
 
-def index_obj(obj_data, ws_info, msg_data):
+def index_obj(obj_data, obj_info, ws_info, msg_data):
     """
     For a newly created object, generate the index document for it and push to
     the elasticsearch topic on Kafka.
@@ -32,45 +30,65 @@ def index_obj(obj_data, ws_info, msg_data):
         msg_data - json event data received from the kafka workspace events
             stream. Must have keys for `wsid` and `objid`
     """
-    obj_type = obj_data['info'][2]
+    obj_type = obj_info[2]
     (type_module, type_name, type_version) = ws_utils.get_type_pieces(obj_type)
     if (type_module + '.' + type_name) in _TYPE_BLACKLIST:
         # Blacklisted type, so we don't index it
+        logger.debug(f'Skipping blacklisted type {type_module}, {type_name}')
         return
+
     # check if this particular object has the tag "noindex"
-    metadata = ws_info[-1]
-    # If the workspace's object metadata contains a "nosearch" tag, skip it
-    if metadata.get('searchtags'):
-        if 'noindex' in metadata['searchtags']:
+    ws_metadata = ws_info[-1]
+    # If the workspace's object metadata contains a "noindex" tag, skip it
+    if ws_metadata.get('searchtags'):
+        if 'noindex' in ws_metadata['searchtags']:
+            logger.debug(f'Skipping "noindex" workspace object {ws_info[0]}, {obj_info[6]}')
             return
-    # Get the info of the first object to get the creation date of the object.
-    upa = get_upa_from_msg_data(msg_data)
-    try:
-        obj_data_v1 = ws_client.admin_req('getObjects', {
-            'objects': [{'ref': upa + '/1'}],
-            'no_data': 1
+
+    # We may refuse to index very large objects
+    # TODO: should be very high in prod, lower for development
+    max_object_size = config().get('max_object_size')
+    if max_object_size and obj_info[9] > max_object_size:
+        logger.debug(f'Skipping large object, > {max_object_size}')
+        return
+
+    # Fetch the object itself, unless it was already fetched.
+    # Note that the case of not being fetched yet is if relation
+    # engine indexing is disabled.
+    if obj_data is None:
+        obj_data = kafka_utils.get_object_data({
+            'wsid': ws_info[0],
+            'objid': obj_info[0]
         })
-    except WorkspaceResponseError as err:
-        logger.error('Workspace response error:', err.resp_data)
-        raise err
-    obj_data_v1 = obj_data_v1['data'][0]
+
+    # Get the info of the first object to get the creation date of the object.
+    if obj_info[4] > 1:
+        upa = get_upa_from_msg_data(msg_data)
+        result = ws_utils.get_object_info3({
+            'objects': [{'ref': upa + '/1'}]
+        })
+        obj_info_v1 = result['infos'][0]
+    else:
+        obj_info_v1 = obj_info
+
+    # All indexers are generators that yield document data for ES.
+
     # Dispatch to a specific type handler to produce the search document
     indexer = _find_indexer(type_module, type_name, type_version)
-    # All indexers are generators that yield document data for ES.
-    defaults = indexer_utils.default_fields(obj_data, ws_info, obj_data_v1)
-    for indexer_ret in indexer(obj_data, ws_info, obj_data_v1):
+    defaults = indexer_utils.default_fields(obj_data, ws_info, obj_info_v1)
+    for indexer_ret in indexer(obj_data, ws_info, obj_info_v1):
         if indexer_ret['_action'] == 'index':
             if '_no_defaults' not in indexer_ret:
                 # Inject all default fields into the index document.
                 indexer_ret['doc'].update(defaults)
             # if not indexer_ret.get('namespace'):
             #     indexer_ret['namespace'] = "WS"
-        if config()['allow_indices'] and indexer_ret['index'] not in config()['allow_indices']:
-            logger.debug(f"Index '{indexer_ret['index']}' is not in ALLOW_INDICES, skipping")
-            continue
-        if indexer_ret['index'] in config()['skip_indices']:
-            logger.debug(f"Index '{indexer_ret['index']}' is in SKIP_INDICES, skipping")
-            continue
+            if config()['allow_indices'] and indexer_ret['index'] not in config()['allow_indices']:
+                logger.debug(f"Index '{indexer_ret['index']}' is not in ALLOW_INDICES, skipping")
+                continue
+            if indexer_ret['index'] in config()['skip_indices']:
+                logger.debug(f"Index '{indexer_ret['index']}' is in SKIP_INDICES, skipping")
+                continue
         yield indexer_ret
 
 
@@ -78,6 +96,8 @@ def _find_indexer(type_module, type_name, type_version):
     """
     Find the indexer function for the given object type within the indexer_directory list.
     """
+
+    # First try to find a local indexer
     last_match = None
     for entry in _INDEXER_DIRECTORY:
         module_match = ('module' not in entry) or entry['module'] == type_module
@@ -87,9 +107,12 @@ def _find_indexer(type_module, type_name, type_version):
             last_match = entry.get('indexer', generic_indexer())
     if last_match:
         return last_match
+
     # No indexer found for this type, check if there is a sdk indexer app
     if type_module + '.' + type_name in config()['global']['sdk_indexer_apps']:
         return index_from_sdk
+
+    # Otherwise provide the generic indexer.
     return generic_indexer()
 
 
@@ -139,6 +162,7 @@ _INDEXER_DIRECTORY = [
 ]
 
 # All types we don't want to index
+# TODO: should this not be in the spec repo?
 _TYPE_BLACKLIST = [
     "KBaseExperiments.AmpliconSet",
     "KBaseExperiments.AttributeMapping",
