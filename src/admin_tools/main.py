@@ -4,8 +4,7 @@ import re
 import json
 import argparse
 from confluent_kafka import Producer
-from kbase_workspace_client import WorkspaceClient
-from kbase_workspace_client.exceptions import WorkspaceResponseError
+import src.utils.ws_utils as ws_utils
 
 from src.utils.config import config
 
@@ -93,16 +92,15 @@ def _reindex(args):
         raise ValueError("--ref value should be in the format '1/2', '1/2/3', or '1'")
     reindexing_obj = len(id_pieces) >= 2
     if reindexing_obj:
-        ev = {'evtype': 'INDEX_NONEXISTENT', 'wsid': id_pieces[0], 'objid': id_pieces[1]}
+        ev = {'evtype': 'INDEX_NONEXISTENT', 'wsid': int(id_pieces[0]), 'objid': int(id_pieces[1])}
         if len(id_pieces) == 3:
-            ev['ver'] = id_pieces[2]
+            ev['ver'] = int(id_pieces[2])
         if args.overwrite:
             ev['evtype'] = 'REINDEX'
     else:
-        ev = {'evtype': 'INDEX_NONEXISTENT_WS', 'wsid': id_pieces[0]}
+        ev = {'evtype': 'INDEX_NONEXISTENT_WS', 'wsid': int(id_pieces[0])}
         if args.overwrite:
             ev['evtype'] = 'REINDEX_WS'
-    print('Producing...')
     _produce(ev)
 
 
@@ -127,14 +125,13 @@ def _reindex_ws_type(args):
     # - Iterate over all workspaces
     #   - For each workspace, list objects
     #   - For each obj matching args.type, produce a reindex event
-    ws = WorkspaceClient(url=config()['kbase_endpoint'], token=config()['ws_token'])
     evtype = 'INDEX_NONEXISTENT'
     if args.overwrite:
         evtype = 'REINDEX'
     for wsid in range(args.start, args.stop + 1):
         try:
-            infos = ws.admin_req('listObjects', {'ids': [wsid]})
-        except WorkspaceResponseError as err:
+            infos = ws_utils.list_objects({'ids': [wsid]})
+        except ws_utils.WorkspaceResponseError as err:
             print(err.resp_data['error']['message'])
             continue
         for obj_info in infos:
