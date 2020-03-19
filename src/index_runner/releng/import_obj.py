@@ -8,12 +8,9 @@ ws_object (unversioned)
     _key: wsid/objid
 """
 import logging
-from kbase_workspace_client import WorkspaceClient
-
+import src.utils.ws_utils as ws_utils
 from src.index_runner.releng import genome
-from src.utils.ws_utils import get_type_pieces
 from src.utils.re_client import save
-from src.utils.config import config
 from src.utils.formatting import (
     ts_to_epoch,
     get_method_key_from_prov,
@@ -61,8 +58,7 @@ def import_object(obj, ws_info):
         # this could use a lot of memory. There's a bunch of code in the workspace for
         # dealing with this situation, but that'd have to be ported to Python and it's pretty
         # complex, so YAGNI for now.
-        ws_client = WorkspaceClient(url=config()['kbase_endpoint'], token=config()['ws_token'])
-        resp = ws_client.admin_req('getObjects', {
+        resp = ws_utils.get_objects2({
             'objects': [{
                 'ref': obj_ver_key.replace(':', '/'),
             }]
@@ -221,7 +217,7 @@ def _save_inst_of_type_edge(obj_ver_key, info_tup):
 def _save_type_vertices(obj_info):
     """Save associated vertices for an object type."""
     obj_type = sanitize_arangodb_key(obj_info[2])
-    (type_module, type_name, type_ver) = get_type_pieces(obj_type)
+    (type_module, type_name, type_ver) = ws_utils.get_type_pieces(obj_type)
     (maj_ver, min_ver) = [int(v) for v in type_ver.split('.')]
     logger.info(f'Saving ws_type_version, ws_type, and ws_type_module for {obj_type}')
     save('ws_type_version', {

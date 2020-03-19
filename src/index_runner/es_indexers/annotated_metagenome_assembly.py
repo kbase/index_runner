@@ -1,5 +1,6 @@
 # KBaseMetagenomes.AnnotatedMetagenomeAssembly indexer
-from src.index_runner.es_indexers.indexer_utils import mean, handle_id_to_file
+from src.index_runner.es_indexers.indexer_utils import mean
+import src.utils.ws_utils as ws_utils
 from src.utils.config import config
 
 import tempfile
@@ -149,7 +150,7 @@ def index_annotated_metagenome_assembly(obj_data, ws_info, obj_data_v1):
         # Download features file
         tmp_dir = tempfile.mkdtemp()
         features_file_gz_path = os.path.join(tmp_dir, ver_ama_id.replace(':', "_") + ".json.gz")
-        handle_id_to_file(features_handle_ref, features_file_gz_path)
+        ws_utils.handle_id_to_file(features_handle_ref, features_file_gz_path)
 
         for doc in _index_ama(features_file_gz_path, data, ama_id, ver_ama_id, tmp_dir):
             yield doc

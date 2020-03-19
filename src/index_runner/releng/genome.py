@@ -8,7 +8,7 @@ from collections import defaultdict as _defaultdict
 import datetime as _datetime
 import itertools as _itertools
 import logging
-from kbase_workspace_client import WorkspaceClient
+import src.utils.ws_utils as ws_utils
 
 from src.utils.config import config
 from src.utils.re_client import stored_query as _stored_query
@@ -54,14 +54,13 @@ def _generate_taxon_edge(obj_ver_key, obj_data):
     if 'taxon_ref' not in obj_data['data']:
         logger.info('No taxon ref in object; skipping..')
         return
-    ws_client = WorkspaceClient(url=config()['kbase_endpoint'], token=config()['ws_token'])
-    result = ws_client.admin_req('getObjects', {
+    result = ws_utils.get_objects2({
         'objects': [{'ref': obj_data['data']['taxon_ref']}]
     })
     taxonomy_id = result['data'][0]['data']['taxonomy_id']
     adb_resp = _stored_query('ncbi_fetch_taxon', {
-       'id': str(taxonomy_id),
-       'ts': int(time.time() * 1000),
+        'id': str(taxonomy_id),
+        'ts': int(time.time() * 1000),
     })
     adb_results = adb_resp['results']
     if not adb_results:
