@@ -16,6 +16,7 @@ from src.index_runner.es_indexers.indexer_utils import (
     check_workspace_deleted,
     is_workspace_public
 )
+import src.utils.es_utils as es_utils
 
 _PREFIX = config()['elasticsearch_index_prefix']
 _ES_URL = config()['elasticsearch_url']
@@ -62,23 +63,39 @@ def reload_aliases():
         logger.info(f"Reloaded elasticsearch aliases")
 
 
-def run_indexer(obj, ws_info, msg):
+def run_indexer(obj, obj_info, ws_info, msg):
     start = time.time()
     batch_writes = []
-    for data in index_obj(obj, ws_info, msg):
+    total_write_count = 0
+    for data in index_obj(obj, obj_info, ws_info, msg):
         action = data['_action']
         if action == 'index':
             batch_writes.append(data)
-            if len(batch_writes) >= _BATCH_WRITE_MAX:
-                _write_to_elastic(batch_writes)
-                logger.info(f'Indexing of {len(batch_writes)} docs on ES took {time.time() - start}s')
-                start = time.time()
-                batch_writes = []
+            # TODO: should be a loop which does _BATCH_WRITE_MAX at a time until
+            # the batch queue is empty
+            while len(batch_writes) >= _BATCH_WRITE_MAX:
+                sub_batch_writes = batch_writes[0:_BATCH_WRITE_MAX]
+                batch_writes = batch_writes[_BATCH_WRITE_MAX:]
+                batch_start = time.time()
+                batch_write_count = len(sub_batch_writes)
+                total_write_count += batch_write_count
+                _write_to_elastic(sub_batch_writes)
+                logger.info((f'Wrote (overflow of {_BATCH_WRITE_MAX}) {batch_write_count} docs '
+                             'to ES in {time.time() - batch_start}s'))
         elif action == 'init_generic_index':
             _init_generic_index(data)
-    if batch_writes:
+        elif action == 'error':
+            es_utils.log_err_to_es({}, err={data['message']})
+
+    # Finish up any queued writes.
+    if len(batch_writes) > 0:
+        batch_start = time.time()
+        batch_write_count = len(batch_writes)
+        total_write_count += batch_write_count
         _write_to_elastic(batch_writes)
-        logger.info(f'Indexing of {len(batch_writes)} docs on ES took {time.time() - start}s')
+        logger.info(f'Wrote {batch_write_count} docs to ES in {time.time() - batch_start}s')
+
+    logger.info(f'Wrote {total_write_count} docs to ES in {time.time() - start}s')
 
 
 def delete_obj(msg):
@@ -168,7 +185,8 @@ def _init_generic_index(msg):
     """
     (_, type_name, type_ver) = get_type_pieces(msg['full_type_name'])
     index_name = type_name.lower()
-    _init_index(index_name + '_0', _GLOBAL_MAPPINGS['ws_object'])
+    mappings = {**_GLOBAL_MAPPINGS['ws_auth'], **_GLOBAL_MAPPINGS['ws_object']}
+    _init_index(index_name + '_0', mappings)
 
 
 def _write_to_elastic(data):
@@ -197,8 +215,19 @@ def _write_to_elastic(data):
     # Save the documents using the elasticsearch http api
     resp = requests.post(f"{_ES_URL}/_bulk", data=json_body, headers={"Content-Type": "application/json"})
     if not resp.ok:
-        # Unsuccesful save to elasticsearch.
+        # Unsuccessful save to elasticsearch.
         raise RuntimeError(f"Error saving to elasticsearch:\n{resp.text}")
+    # print(resp.content)
+    result = json.loads(resp.content)
+    # print(result)
+    # TODO: a bit fragile, improve the grokking of error info
+    if result['errors']:
+        indexing_result = result['items'][0]['index']
+        index_name = indexing_result['_index']
+        error_reason = indexing_result['error']['reason']
+        raise RuntimeError(f'Error saving to elasticsearch index {index_name}: {error_reason}')
+    # print('RESPONSE')
+    # print(resp.content)
 
 
 def _update_by_query(query, script, config):
@@ -237,6 +266,7 @@ def _create_index(index_name):
     """
     Create an index on Elasticsearch with a given name.
     """
+    # TODO: why is this hard coded here? Should be configured
     request_body = {
         "settings": {
             "index": {
