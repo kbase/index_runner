@@ -5,7 +5,7 @@ _READS_INDEX_VERSION = 1
 _READS_INDEX_NAME = 'reads_' + str(_READS_INDEX_VERSION)
 
 
-def index_reads(obj_data, ws_info, obj_data_v1):
+def index_reads(obj_data, ws_info, obj_info_v1):
     '''
     Indexes both singleend reads and pairedend reads
     '''

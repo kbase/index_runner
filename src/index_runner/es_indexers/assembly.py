@@ -1,19 +1,21 @@
 from src.index_runner.es_indexers.indexer_utils import mean
+import src.utils.ws_utils as ws_utils
 
 _NAMESPACE = "WS"
 _ASSEMBLY_INDEX_VERSION = 1
 _ASSEMBLY_INDEX_NAME = 'assembly_' + str(_ASSEMBLY_INDEX_VERSION)
 
 
-def index_assembly(obj_data, ws_info, obj_data_v1):
+def index_assembly(obj_data, ws_info, obj_info_v1):
     """
     Currently Handles the follownig workspace types:
          KBaseGenomeAnnotations.Assembly-6.0
     """
-    info = obj_data['info']
     data = obj_data['data']
-    workspace_id = info[6]
-    object_id = info[0]
+    obj_info = obj_data['info']
+    workspace_id = obj_info[6]
+    object_id = obj_info[0]
+
     # get mean contig length
     if data.get('contigs'):
         # we do not include the contig if it does not store the requisite field

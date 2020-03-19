@@ -9,19 +9,21 @@ _GENOME_INDEX_NAME = 'genome_' + str(_GENOME_INDEX_VERSION)
 _GENOME_FEATURE_INDEX_NAME = 'genome_features_' + str(_GENOME_FEATURE_INDEX_VERSION)
 
 
-def index_genome(obj_data, ws_info, obj_data_v1):
+def index_genome(obj_data, ws_info, obj_info_v1):
     """
     Currently indexes following workspace types:
         ci:              KBaseGenomes.Genome-13.0+
         narrative(prod): KBaseGenomes.Genome-8.1+
     """
-    info = obj_data['info']
-    if not obj_data.get('data'):
+
+    data = obj_data.get('data')
+    if not data:
         raise Exception("no data in object")
-    data = obj_data['data']
-    workspace_id = info[6]
-    object_id = info[0]
-    version = info[4]
+
+    obj_info = obj_data['info']
+    workspace_id = obj_info[6]
+    object_id = obj_info[0]
+    version = obj_info[4]
     '''
     feature
         feat_type
