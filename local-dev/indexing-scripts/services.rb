@@ -48,8 +48,8 @@ class JSONRPC  < Service
 end
 
 class Rest < Service
-    def initialize(env, path)
-        super(env)
+    def initialize(env, path, token)
+        super(env, token)
         @path = path
     end
 
@@ -59,14 +59,20 @@ class Rest < Service
         else
             uri = URI("https://#{@host}/services/#{@path}/")
         end
+
         request = Net::HTTP::Get.new(uri, 'Content-Type' => 'application/json')
         request['Accept'] = 'application/json'
+        if @token
+            request['Authorization'] = @token
+        end
         response = Net::HTTP.start(uri.hostname, uri.port, :use_ssl => true) do |http|
             http.request(request)
         end
         return JSON.parse(response.body)
     end
 end
+
+# JSONRPC Services
 
 class Workspace < JSONRPC
     def initialize(env, token)
@@ -136,6 +142,8 @@ class NJS < JSONRPC
     end
 end
 
+# REST Services
+
 class Feeds < Rest
     def initialize(env)
         super(env, 'feeds')
@@ -157,11 +165,15 @@ class Groups < Rest
 end
 
 class Auth < Rest
-    def initialize(env)
-        super(env, 'auth')
+    def initialize(env, token)
+        super(env, 'auth', token)
     end
 
     def version
         get()['version']
+    end
+
+    def token
+        get('api/V2/token')
     end
 end
