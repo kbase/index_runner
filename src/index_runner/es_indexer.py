@@ -63,10 +63,20 @@ def reload_aliases():
         logger.info(f"Reloaded elasticsearch aliases")
 
 
+def pluralize(n, singular_term, plural_term):
+    if n is None:
+        return f'no {plural_term}'
+    elif n == 1:
+        return f'1 {singular_term}'
+    else:
+        return f'{n} {plural_term}'
+
+
 def run_indexer(obj, obj_info, ws_info, msg):
     start = time.time()
     batch_writes = []
     total_write_count = 0
+    total_error_count = 0
     for data in index_obj(obj, obj_info, ws_info, msg):
         action = data['_action']
         if action == 'index':
@@ -80,11 +90,12 @@ def run_indexer(obj, obj_info, ws_info, msg):
                 batch_write_count = len(sub_batch_writes)
                 total_write_count += batch_write_count
                 _write_to_elastic(sub_batch_writes)
-                logger.info((f'Wrote (overflow of {_BATCH_WRITE_MAX}) {batch_write_count} docs '
+                logger.info((f'Wrote (overflow of {_BATCH_WRITE_MAX}) {pluralize(batch_write_count, "doc", "docs")} '
                              'to ES in {time.time() - batch_start}s'))
         elif action == 'init_generic_index':
             _init_generic_index(data)
         elif action == 'error':
+            total_error_count += 1
             es_utils.log_err_to_es({}, err={data['message']})
 
     # Finish up any queued writes.
@@ -93,9 +104,11 @@ def run_indexer(obj, obj_info, ws_info, msg):
         batch_write_count = len(batch_writes)
         total_write_count += batch_write_count
         _write_to_elastic(batch_writes)
-        logger.info(f'Wrote {batch_write_count} docs to ES in {time.time() - batch_start}s')
+        logger.info(f'Wrote {pluralize(batch_write_count, "doc", "docs")} to ES in {time.time() - batch_start}s')
 
-    logger.info(f'Wrote {total_write_count} docs to ES in {time.time() - start}s')
+    logger.info(f'Indexed {pluralize(total_write_count, "object", "objects")} in {time.time() - start}s')
+    if total_error_count > 0:
+        logger.info(f'Indexed {pluralize(total_error_count, "error", "errors")} in {time.time() - start}s')
 
 
 def delete_obj(msg):
