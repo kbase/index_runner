@@ -1,9 +1,8 @@
-version: '3'
+version: "3"
 
 # This docker-compose is for developer convenience, not for running in production.
 
 services:
-
   # For running the python consumers
   app:
     build:
@@ -26,8 +25,11 @@ services:
       - DEVELOPMENT=1
       - PYTHONUNBUFFERED=true
       - RE_URL=http://re_api:5000
-      - WORKSPACE_TOKEN=valid_admin_token
-      - RE_API_TOKEN=valid_admin_token
+      - WORKSPACE_TOKEN=${WORKSPACE_TOKEN}
+      - RE_API_TOKEN=${RE_API_TOKEN}
+      - WS_ADMIN=${WS_ADMIN}
+      - SKIP_RELENG=${SKIP_RELENG}
+      - READY_TIMEOUT=${READY_TIMEOUT}
 
   kafka:
     image: confluentinc/cp-kafka:5.0.0
