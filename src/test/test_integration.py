@@ -8,15 +8,15 @@ from src.utils.config import config
 from src.utils.re_client import get_doc
 
 _TEST_EVENT = {
-   "wsid": 33192,
-   "ver": 2,
-   "perm": None,
-   "evtype": "NEW_VERSION",
-   "objid": 23,
-   "time": 1578439639664,
-   "objtype": "KBaseGenomeAnnotations.Assembly-6.0",
-   "permusers": [],
-   "user": "jayrbolton"
+    "wsid": 33192,
+    "ver": 2,
+    "perm": None,
+    "evtype": "NEW_VERSION",
+    "objid": 23,
+    "time": 1578439639664,
+    "objtype": "KBaseGenomeAnnotations.Assembly-6.0",
+    "permusers": [],
+    "user": "jayrbolton"
 }  # type: dict
 
 
@@ -36,12 +36,15 @@ class TestIntegration(unittest.TestCase):
         wsid = _TEST_EVENT['wsid']  # type: ignore
         objid = _TEST_EVENT['objid']  # type: ignore
         es_id = f"WS::{wsid}:{objid}"  # type: ignore
-        re_key = f"{wsid}:{objid}"
         es_doc = _get_es_doc_blocking(es_id)
-        re_doc = _wait_for_re_doc('ws_object', re_key)
         self.assertEqual(es_doc['_id'], es_id)
-        self.assertEqual(re_doc['workspace_id'], wsid)
-        self.assertEqual(re_doc['object_id'], objid)
+
+        # Elide test if SKIP_RELENG is true
+        if not config().get('skip_releng', False):
+            re_key = f"{wsid}:{objid}"
+            re_doc = _wait_for_re_doc('ws_object', re_key)
+            self.assertEqual(re_doc['workspace_id'], wsid)
+            self.assertEqual(re_doc['object_id'], objid)
 
 
 # -- Test utils
@@ -53,10 +56,13 @@ def _delivery_report(err, msg):
         print(f'Message delivered to: {msg.topic()}')
 
 
+producer = Producer({'bootstrap.servers': config()['kafka_server']})
+
+
 def _produce(data, topic=config()['topics']['workspace_events']):
-    producer = Producer({'bootstrap.servers': config()['kafka_server']})
     producer.produce(topic, json.dumps(data), callback=_delivery_report)
-    producer.poll(60)
+    # producer.poll(60)
+    producer.flush()
     print(f"Produced {data}")
 
 
@@ -116,6 +122,7 @@ def _get_es_aliases():
 
 def _wait_for_re_doc(coll, key, timeout=180):
     """Fetch a doc with the RE API, waiting for it to become available with a 30s timeout."""
+
     start_time = time.time()
     while True:
         print(f'Waiting for doc {coll}/{key}')

@@ -1,0 +1,60 @@
+{
+    "methods": [
+        "POST"
+    ],
+    "path": "/ws",
+    "headers": {
+        "Authorization": "valid_admin_token"
+    },
+    "body": {
+        "version": "1.1",
+        "method": "Workspace.administer",
+        "params": [
+            {
+                "command": "getObjectInfo",
+                "params": {
+                    "objects": [
+                        {
+                            "ref": "33192/23/2"
+                        }
+                    ]
+                }
+            }
+        ]
+    },
+    "response": {
+        "status": "200",
+        "body": {
+            "version": "1.1",
+            "result": [
+                {
+                    "infos": [
+                        [
+                            23,
+                            "GCF_000762265.1_assembly",
+                            "KBaseGenomeAnnotations.Assembly-6.0",
+                            "2020-01-09T19:04:59+0000",
+                            1,
+                            "jayrbolton",
+                            33192,
+                            "jayrbolton:narrative_1528306445083",
+                            "f9dbc6acf1176660b67bfb43ddcc79f5",
+                            857,
+                            {
+                                "GC content": "0.4134",
+                                "Size": "2449987",
+                                "N Contigs": "1",
+                                "MD5": "3113b0e9d69510c2f02d223d053b14d5"
+                            }
+                        ]
+                    ],
+                    "path": [
+                        [
+                            "33192/23/1"
+                        ]
+                    ]
+                }
+            ]
+        }
+    }
+}

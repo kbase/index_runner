@@ -8,17 +8,14 @@
     },
     "body": {
         "version": "1.1",
-        "method": "Workspace.administer",
+        "method": "Workspace.get_objects2",
         "params": [
             {
-                "command": "getObjects",
-                "params": {
-                    "objects": [
-                        {
-                            "ref": "33192/23/2"
-                        }
-                    ]
-                }
+                "objects": [
+                    {
+                        "ref": "33192/23"
+                    }
+                ]
             }
         ]
     },
