@@ -29,10 +29,15 @@ def wait_for_dependencies(elasticsearch=True, re_api=True, timeout=60):
 def _wait_for_service(url, name, start_time, timeout, params=None):
     while True:
         try:
-            logger.info(f'Waiting for {name} service...')
+            logger.info(f'waiting for {name} service...')
             requests.get(url, params=params).raise_for_status()
+            logger.info(f'{name} service available!')
             break
         except Exception:
-            time.sleep(5)
-            if (int(time.time()) - start_time) > timeout:
+            elapsed = int(time.time()) - start_time
+            logger.warn(f'{name} still unavailable after {elapsed}s')
+            if (elapsed > timeout):
+                logger.error(f'waiting for {name} timed out after {elapsed}s')
                 raise RuntimeError(f"Failed to connect to all services in {timeout}s. Timed out on {name}.")
+
+        time.sleep(5)
