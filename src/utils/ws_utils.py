@@ -26,17 +26,17 @@ def workspace_admin_method(method):
 
 def __workspace_method(method):
     if method == 'listObjects':
-        return 'list_objects'
+        return 'Workspace.list_objects'
     elif method == 'getObjects':
-        return 'get_objects2'
+        return 'Workspace.get_objects2'
     elif method == 'getObjectInfo':
-        return 'get_object_info3'
+        return 'Workspace.get_object_info3'
     elif method == 'getWorkspaceInfo':
-        return 'get_workspace_info'
+        return 'Workspace.get_workspace_info'
     elif method == 'getPermissionsMass':
-        return 'get_permissions_mass'
+        return 'Workspace.get_permissions_mass'
     elif method == 'listWorkspaces':
-        return 'list_workspaces'
+        return 'Workspace.list_workspaces'
     else:
         raise ValueError(f'Workspace method "{method}" not supported    "')
 
@@ -74,15 +74,14 @@ def list_workspaces(params, username=None):
 
 def __workspace_request(method, params, username=None):
     ws_client = WorkspaceClient(url=config()['kbase_endpoint'], token=config()['ws_token'])
-    resolved_method = __workspace_method(method)
     try:
         if is_workspace_admin():
             if username is not None:
-                return ws_client.admin_req(resolved_method, params, username)
+                return ws_client.admin_req(method, params, username)
             else:
-                return ws_client.admin_req(resolved_method, params)
+                return ws_client.admin_req(method, params)
         else:
-            return ws_client.req(resolved_method, params)
+            return ws_client.req(__workspace_method(method), params)
     except WorkspaceResponseError as err:
         logger.error('Workspace response error:', err.resp_data)
         raise err
