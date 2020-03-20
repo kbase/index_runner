@@ -1,5 +1,4 @@
 from src.index_runner.es_indexers.indexer_utils import mean
-import src.utils.ws_utils as ws_utils
 
 _NAMESPACE = "WS"
 _ASSEMBLY_INDEX_VERSION = 1
