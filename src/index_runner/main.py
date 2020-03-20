@@ -3,30 +3,43 @@ Main entrypoint for the app and the Kafka topic consumer.
 Sends work to the es_indexer or the releng_importer.
 Generally handles every message synchronously. Duplicate the service to get more parallelism.
 """
-import logging
-import logging.handlers
-import os
-import json
-import time
-import requests
-import sys
-import atexit
-import signal
-import traceback
-import hashlib
-from confluent_kafka import Consumer, KafkaError, Producer
-from kbase_workspace_client import WorkspaceClient
-from kbase_workspace_client.exceptions import WorkspaceResponseError
-
-import src.utils.es_utils as es_utils
-import src.utils.re_client as re_client
-import src.index_runner.es_indexer as es_indexer
 import src.index_runner.releng_importer as releng_importer
+import src.index_runner.es_indexer as es_indexer
+import src.utils.re_client as re_client
+import src.utils.es_utils as es_utils
+import src.utils.ws_utils as ws_utils
+import src.utils.kafka_utils as kafka_utils
+from confluent_kafka import Consumer, KafkaError, Producer
+import traceback
+import signal
+import atexit
+import sys
+import requests
+import time
+import json
+import os
+import logging.handlers
+import logging
 from src.utils.config import config
 from src.utils.service_utils import wait_for_dependencies
+from src.utils.state import AppState
 
 logger = logging.getLogger('IR')
-ws_client = WorkspaceClient(url=config()['kbase_endpoint'], token=config()['ws_token'])
+
+consumer = None
+producer = None
+# Wait up to a minute on shutdown to finish up the kafka producer queue
+KAFKA_PRODUCER_FLUSH_TIMEOUT = 60
+# Timeout for the call to producer.poll in the main loop
+KAFKA_PRODUCER_POLL_TIMEOUT = 0.5
+# Upon sending messages, if the queue is full, the send loop will
+# poll with a timeout value set below...
+KAFKA_PRODUCER_RETRY_TIMEOUT = 10
+# ...and retry the send this many times
+KAFKA_PRODUCER_RETRY_TRIES = 3
+STATE_FILE = '/scratch/indexrunner.state'
+
+app_state = AppState(STATE_FILE)
 
 
 def _init_consumer():
@@ -50,7 +63,7 @@ def _init_consumer():
     return consumer
 
 
-def _close_consumer(signum=None, stack_frame=None):
+def _close_consumer():
     """
     This will close the network connections and sockets. It will also trigger
     a rebalance immediately rather than wait for the group coordinator to
@@ -58,23 +71,52 @@ def _close_consumer(signum=None, stack_frame=None):
     which will take longer and therefore result in a longer period of time in
     which consumers can’t consume messages from a subset of the partitions.
     """
-    consumer.close()
-    logger.info("Closed the Kafka consumer")
+    if consumer is not None:
+        consumer.close()
+        logger.info("Closed the Kafka consumer")
+    else:
+        logger.info("Kafka consumer not available, close skipped")
 
 
-# Initialize and run the Kafka consumer
-consumer = _init_consumer()
-atexit.register(_close_consumer)
-signal.signal(signal.SIGTERM, _close_consumer)
-signal.signal(signal.SIGINT, _close_consumer)
+def _init_producer():
+    return Producer({'bootstrap.servers': config()['kafka_server'], 'error_cb': _producer_error_cb})
+
+
+def _close_producer():
+    # Note that the producer error callback will be invoked on timeout (I think).
+    logger.info(f'Closing Kafka producer, timeout {KAFKA_PRODUCER_FLUSH_TIMEOUT}s')
+    producer.flush(KAFKA_PRODUCER_FLUSH_TIMEOUT)
+
+
+def _close_kafka(signum=None, stack_frame=None):
+    _close_consumer()
+    _close_producer()
+
+
+def _start_kafka():
+    global consumer
+    global producer
+    # Initialize and run the Kafka consumer
+    try:
+        consumer = _init_consumer()
+        producer = _init_producer()
+        atexit.register(_close_kafka)
+        signal.signal(signal.SIGTERM, _close_kafka)
+        signal.signal(signal.SIGINT, _close_kafka)
+
+    except Exception as error:
+        logger.error(f'Error setting up Kafka consumer ${str(error)}')
+        exit(1)
 
 
 def main():
     """
     Run the the Kafka consumer and two threads for the releng_importer and es_indexer
     """
+    app_state.starting()
+
     # Wait for dependency services (ES and RE) to be live
-    wait_for_dependencies(timeout=180)
+    wait_for_dependencies(timeout=180, re_api=config().get('skip_releng', False))
     # Used for re-fetching the configuration with a throttle
     last_updated_minute = int(time.time() / 60)
     if not config()['global_config_url']:
@@ -84,8 +126,12 @@ def main():
     es_indexer.init_indexes()
     es_indexer.reload_aliases()
 
+    app_state.ready()
+
     while True:
         msg = consumer.poll(timeout=0.5)
+        producer.poll(KAFKA_PRODUCER_POLL_TIMEOUT)
+        # logger.debug(f'PROCESSED (main loop): {processed_count}, PENDING: {len(producer)}')
         if msg is None:
             continue
         curr_min = int(time.time() / 60)
@@ -109,6 +155,10 @@ def main():
         except ValueError as err:
             logger.error(f'JSON parsing error: {err}')
             logger.error(f'Message content: {val}')
+            # TODO: If this message does not parse, what should be done?
+            # skip it? (commit then continue)
+            # log it? (log, commit, continue)
+            # create an error entry? (log error to es, log, commit, continue)
         logger.info(f'Received event: {msg}')
         start = time.time()
         try:
@@ -120,38 +170,65 @@ def main():
             logger.error(f'Error processing message: {err.__class__.__name__} {err}')
             logger.error(traceback.format_exc())
             # Save this error and message to a topic in Elasticsearch
-            _log_err_to_es(msg, err=err)
+            es_utils.log_err_to_es(msg, err=err)
+
+    # if monitoring_server:
+    #     logging.debug('monitoring stopping')
+    #     monitoring_server.stop()
 
 
 def _handle_msg(msg):
     event_type = msg.get('evtype')
     if not event_type:
         logger.warning(f"Missing 'evtype' in event: {msg}")
+        # TODO: we don't want to miss messages, even misconfigured ones, right?
+        #       so shouldn't we have an es error entry?
         return
     if event_type in ['REINDEX', 'NEW_VERSION', 'COPY_OBJECT', 'RENAME_OBJECT']:
-        obj = _fetch_obj_data(msg)
-        ws_info = _fetch_ws_info(msg)
-        if not config()['skip_releng']:
+        if config()['skip_releng']:
+            need_in_re = False
+
+        obj = None
+        ws_info = kafka_utils.get_workspace_info(msg)
+        if need_in_re:
+            obj = kafka_utils.get_object_data(msg)
             releng_importer.run_importer(obj, ws_info, msg)
-        es_indexer.run_indexer(obj, ws_info, msg)
+
+        if obj is None:
+            obj_info = kafka_utils.get_object_info(msg)
+        else:
+            obj_info = obj['info']
+        es_indexer.run_indexer(obj, obj_info, ws_info, msg)
     elif event_type == 'REINDEX_WS' or event_type == 'CLONE_WORKSPACE':
         # Reindex all objects in a workspace, overwriting existing data
-        for (objid, _) in ws_client.generate_all_ids_for_workspace(msg['wsid'], admin=True):
+        for (objid, _) in ws_utils.list_workspace_ids(msg['wsid']):
             _produce({'evtype': 'REINDEX', 'wsid': msg['wsid'], 'objid': objid})
     elif event_type == 'INDEX_NONEXISTENT_WS':
         # Reindex all objects in a workspace without overwriting any existing data
-        for (objid, _) in ws_client.generate_all_ids_for_workspace(msg['wsid'], admin=True):
+        for (objid, _) in ws_utils.list_workspace_ids(msg['wsid']):
             _produce({'evtype': 'INDEX_NONEXISTENT', 'wsid': msg['wsid'], 'objid': objid})
     elif event_type == 'INDEX_NONEXISTENT':
-        exists_in_releng = re_client.check_doc_existence(msg['wsid'], msg['objid'])
-        exists_in_es = es_utils.check_doc_existence(msg['wsid'], msg['objid'])
-        if not exists_in_releng or not exists_in_es:
-            obj = _fetch_obj_data(msg)
-            ws_info = _fetch_ws_info(msg)
-            if not exists_in_releng and not config()['skip_releng']:
+        # Since relation engine integration is optional, we should try to fetch if disabled
+        if config()['skip_releng']:
+            need_in_re = False
+        else:
+            need_in_re = not re_client.check_doc_existence(msg['wsid'], msg['objid'])
+
+        need_in_es = not es_utils.check_doc_existence(msg['wsid'], msg['objid'])
+
+        if need_in_re or need_in_es:
+            obj = None
+            ws_info = kafka_utils.get_workspace_info(msg)
+            if need_in_re:
+                obj = kafka_utils.get_object_data(msg)
                 releng_importer.run_importer(obj, ws_info, msg)
-            if not exists_in_es:
-                es_indexer.run_indexer(obj, ws_info, msg)
+
+            if obj is None:
+                obj_info = kafka_utils.get_object_info(msg)
+            else:
+                obj_info = obj['info']
+            if need_in_es:
+                es_indexer.run_indexer(obj, obj_info, ws_info, msg)
     elif event_type == 'OBJECT_DELETE_STATE_CHANGE':
         # Delete the object on RE and ES. Synchronous for now.
         es_indexer.delete_obj(msg)
@@ -173,45 +250,6 @@ def _handle_msg(msg):
     else:
         logger.warning(f"Unrecognized event {event_type}.")
         return
-
-
-def _fetch_obj_data(msg):
-    if not msg.get('wsid') or not msg.get('objid'):
-        raise RuntimeError(f'Cannot get object ref from msg: {msg}')
-    obj_ref = f"{msg['wsid']}/{msg['objid']}"
-    if msg.get('ver'):
-        obj_ref += f"/{msg['ver']}"
-    try:
-        obj_data = ws_client.admin_req('getObjects', {
-            'objects': [{'ref': obj_ref}]
-        })
-    except WorkspaceResponseError as err:
-        logger.error(f'Workspace response error: {err.resp_data}')
-        # Workspace is deleted; ignore the error
-        if (err.resp_data and isinstance(err.resp_data, dict)
-                and err.resp_data['error'] and isinstance(err.resp_data['error'], dict)
-                and err.resp_data['error'].get('code') == -32500):
-            return
-        else:
-            raise err
-    result = obj_data['data'][0]
-    if not obj_data or not obj_data['data'] or not obj_data['data'][0]:
-        logger.error(obj_data)
-        raise RuntimeError("Invalid object result from the workspace")
-    return result
-
-
-def _fetch_ws_info(msg):
-    if not msg.get('wsid'):
-        raise RuntimeError(f'Cannot get workspace info from msg: {msg}')
-    try:
-        ws_info = ws_client.admin_req('getWorkspaceInfo', {
-            'id': msg['wsid']
-        })
-    except WorkspaceResponseError as err:
-        logger.error(f'Workspace response error: {err.resp_data}')
-        raise err
-    return ws_info
 
 
 def _fetch_latest_config_tag():
@@ -237,27 +275,45 @@ def _fetch_latest_config_tag():
     return data['tag_name']
 
 
+def _producer_error_cb(err):
+    # TODO: should producer errors not be logged to ES as well?
+    logging.error('Producer error: %s' % err)
+
+
 def _produce(data, topic=config()['topics']['admin_events']):
     """
-    Produce a new event messagew on a Kafka topic and block at most 60s for it to get published.
+    Produce a new event message on a Kafka topic and block at most 0.1 for it to get published.
     """
-    producer = Producer({'bootstrap.servers': config()['kafka_server']})
-    producer.produce(topic, json.dumps(data), callback=_delivery_report)
-    producer.poll(0.1)
 
-
-def _log_err_to_es(msg, err=None):
-    """Log an indexing error in an elasticsearch index."""
-    # The key is a hash of the message data body
-    # The index document is the error string plus the message data itself
-    _id = hashlib.blake2b(json.dumps(msg).encode('utf-8')).hexdigest()
-    es_indexer._write_to_elastic([
-        {
-            'index': config()['error_index_name'],
-            'id': _id,
-            'doc': {'error': str(err), **msg}
-        }
-    ])
+    tries = KAFKA_PRODUCER_RETRY_TRIES
+    message = json.dumps(data)
+    while tries > 0:
+        try:
+            producer.produce(topic, message, callback=_delivery_report)
+            # Will immediately pop off any fully completed items from the
+            # send queue
+            # Just housekeeping, really, reducing the load on the main loop.
+            # Note that this does not pop off the just-sent message,
+            # since producer is async. That will be handled in the main loop.
+            # But, just in case, the exception handling will take care of
+            # the queue filling up.
+            producer.poll(0)
+            tries = 0
+        except BufferError as e:
+            # Handles the case of a full send queue. This can happen if there
+            # are > buffer size events in the send queue, which defaults to 10K.
+            # This can happen, e.g., when workspace index spins out thousands of
+            # indexing requests in quick succession.
+            tries = tries - 1
+            logger.error((f'BufferError sending kafka message (produce), '
+                          'waiting {KAFKA_PRODUCE_RETRY_TIMEOUT}s, retrying {tries - 1} more times'))
+            producer.poll(KAFKA_PRODUCER_RETRY_TIMEOUT)
+            if tries == 0:
+                logger.error(f'Kafka produce could not successfully complete after {KAFKA_PRODUCER_RETRY_TRIES} tries')
+                # Reraising this error should cause an error message into ES
+                # and will also ensure that if this is part of a kafka consume the
+                # upstream message is left in place and not lost.
+                raise e
 
 
 def _delivery_report(err, msg):
@@ -302,5 +358,11 @@ if __name__ == '__main__':
     # Make the urllib debug logs less noisy
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     init_logger()
+
     # Run the main thread
-    main()
+    _start_kafka()
+    try:
+        main()
+        app_state.done()
+    except Exception as e:
+        app_state.error(str(e))
