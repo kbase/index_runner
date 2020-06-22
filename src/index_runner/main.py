@@ -267,7 +267,7 @@ def _fetch_latest_config_tag():
 
 def _produce(data, topic=config()['topics']['admin_events']):
     """
-    Produce a new event messagew on a Kafka topic and block at most 60s for it to get published.
+    Produce a new event message on a Kafka topic and block at most 60s for it to get published.
     """
     producer = Producer({'bootstrap.servers': config()['kafka_server']})
     tries = 0
