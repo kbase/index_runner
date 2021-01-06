@@ -18,7 +18,7 @@ _TEST_EVENT = {
    "objid": 2,
    "time": 101,
    "user": "jayrbolton",
-   "index_runner_ver": "1.9.10",
+   "index_runner_ver": config()['app_version'],
 }
 
 

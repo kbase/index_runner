@@ -78,7 +78,7 @@ def _get_sample_version_uuid(sample: dict) -> str:
 
 
 def _hash(string: str) -> str:
-    return _hashlib.blake2b(string.encode("utf-8"), digest_size=16).hexdigest()
+    return _hashlib.md5(string.encode("utf-8")).hexdigest()  # nosec
 
 
 def _generate_link_information(sample: dict, sample_version_uuid: str, edges: list, term_bank: dict):
