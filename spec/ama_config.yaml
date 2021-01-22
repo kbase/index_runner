@@ -21,6 +21,9 @@ aliases:
     - annotated_metagenome_assembly_features_version_2
     - annotated_metagenome_assembly_features_version_1
 
+ws_type_blacklist: []
+
+
 # Generic, global type mappings. These can be reused in any index mappings below.
 global_mappings:
   all:
