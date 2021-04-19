@@ -6,8 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.19] - 2021-04-19
+
 ### Fixed
 - Fixing Samples Releng indexer to work with RE api time-travel.
+- Added prefix to default_search alias
+- Removed reads_1 from reads alias
+- Removed pangenome_orthologfamily from default_search
 
 ### Added
 - adding narrative_config.yaml spec file for separating narrative indexing.
