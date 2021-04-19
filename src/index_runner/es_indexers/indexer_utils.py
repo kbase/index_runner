@@ -1,11 +1,9 @@
-import logging
-from kbase_workspace_client import WorkspaceClient
 from kbase_workspace_client.exceptions import WorkspaceResponseError
+import logging
 
 from src.utils.config import config
-from src.utils.ws_utils import get_type_pieces
-
-logger = logging.getLogger('IR')
+from src.utils.logger import logger
+from src.utils.ws_utils import get_type_pieces, log_error
 
 _REF_DATA_WORKSPACES = []  # type: list
 
@@ -18,11 +16,10 @@ def check_object_deleted(ws_id, obj_id):
     We want to do this because the DELETE event can correspond to more than
     just an object deletion, so we want to make sure the object is deleted
     """
-    ws_client = WorkspaceClient(url=config()['kbase_endpoint'], token=config()['ws_token'])
     try:
-        narr_data_obj_info = ws_client.admin_req("listObjects", {'ids': [ws_id]})
+        narr_data_obj_info = config()['ws_client'].admin_req("listObjects", {'ids': [ws_id]})
     except WorkspaceResponseError as err:
-        logger.warning(f"Workspace response error: {err.resp_data}")
+        log_error(err, logging.WARNING)
         narr_data_obj_info = []
     # Make sure obj_id is not in list of object ids (this means it is deleted)
     obj_ids = [obj[0] for obj in narr_data_obj_info]
@@ -33,8 +30,7 @@ def is_workspace_public(ws_id):
     """
     Check if a workspace is public, returning bool.
     """
-    ws_client = WorkspaceClient(url=config()['kbase_endpoint'], token=config()['ws_token'])
-    ws_info = ws_client.admin_req('getWorkspaceInfo', {'id': ws_id})
+    ws_info = config()['ws_client'].admin_req('getWorkspaceInfo', {'id': ws_id})
     global_read = ws_info[6]
     return global_read != 'n'
 
@@ -45,9 +41,8 @@ def check_workspace_deleted(ws_id):
     we make sure that the workspace is deleted. This is done by making sure we get an excpetion
     with the word 'delete' in the error body.
     """
-    ws_client = WorkspaceClient(url=config()['kbase_endpoint'], token=config()['ws_token'])
     try:
-        ws_client.admin_req("getWorkspaceInfo", {
+        config()['ws_client'].admin_req("getWorkspaceInfo", {
             'id': ws_id
         })
     except WorkspaceResponseError as err:
@@ -62,9 +57,8 @@ def get_shared_users(ws_id):
     Args:
         ws_id - workspace id of requested workspace object
     """
-    ws_client = WorkspaceClient(url=config()['kbase_endpoint'], token=config()['ws_token'])
     try:
-        obj_perm = ws_client.admin_req("getPermissionsMass", {
+        obj_perm = config()['ws_client'].admin_req("getPermissionsMass", {
             'workspaces': [{'id': ws_id}]
         })['perms'][0]
     except WorkspaceResponseError as err:
@@ -87,6 +81,52 @@ def _get_tags(ws_info):
             return [metadata['searchtags']]
     else:
         return []
+
+
+def merge_default_fields(indexer_ret, defaults):
+    """
+    Merge default fields into existing default fields (if they exist)
+    All compound values are wrapped in lists without unique values
+    Singletons are not wrapped in lists, while null vals are None
+    """
+    if 'doc' not in indexer_ret:
+        raise ValueError(f"indexer return data should have 'doc' dictionary {indexer_ret}")
+    # Merge each list inside each dict
+    for key, default_val in defaults.items():
+        val = indexer_ret['doc'].get(key)
+        val_is_list = isinstance(val, list)
+        def_is_list = isinstance(default_val, list)
+        if val is None:
+            val = default_val
+        elif val_is_list and def_is_list:
+            val = _remove_dupes(val + default_val)
+        elif val_is_list and default_val not in val:
+            val.append(default_val)
+        elif def_is_list and val not in default_val:
+            default_val.append(val)
+            val = default_val
+        elif not val_is_list and not def_is_list and val != default_val:
+            val = [val, default_val]
+        indexer_ret['doc'][key] = val
+    # Remove duplicates
+    for key, val in indexer_ret['doc'].items():
+        if isinstance(val, list):
+            indexer_ret['doc'][key] = _remove_dupes(val)
+    return indexer_ret
+
+
+def _remove_dupes(ls: list) -> list:
+    """Remove duplicate values from a list."""
+    try:
+        # Try the more efficient method first
+        return list(set(ls))
+    except TypeError:
+        # Fall back to a slower method
+        ret = []
+        for v in ls:
+            if v not in ret:
+                ret.append(v)
+        return ret
 
 
 def default_fields(obj_data, ws_info, obj_data_v1):
@@ -123,9 +163,8 @@ def default_fields(obj_data, ws_info, obj_data_v1):
 
 def handle_id_to_file(handle_id, dest_path):
     """given handle id, download associated file from shock."""
-    ws_client = WorkspaceClient(url=config()['kbase_endpoint'], token=config()['ws_token'])
-    shock_id = ws_client.handle_to_shock(handle_id)
-    ws_client.download_shock_file(shock_id, dest_path)
+    shock_id = config()['ws_client'].handle_to_shock(handle_id)
+    config()['ws_client'].download_shock_file(shock_id, dest_path)
 
 
 def mean(array):

@@ -1,12 +1,14 @@
+from kbase_workspace_client import WorkspaceClient
+from typing import Optional
+import json
+import os
+import requests
+import time
 import urllib.request
 import yaml
-import os
-import json
-import time
-import logging
-import requests
 
-logger = logging.getLogger('IR')
+from src.utils.logger import logger
+
 _FETCH_CONFIG_RETRIES = 5
 
 # Defines a process-wide instance of the config.
@@ -15,8 +17,8 @@ _FETCH_CONFIG_RETRIES = 5
 _CONFIG_SINGLETON = None
 
 
-def get_sample_service_url(sw_url, ss_release):
-    """"""
+def _get_sample_service_url(sw_url, ss_release):
+    """Fetch the latest URL for the sample service using the ServiceWizard"""
     payload = {
         "method": "ServiceWizard.get_service_status",
         "id": '',
@@ -24,7 +26,6 @@ def get_sample_service_url(sw_url, ss_release):
         "version": "1.1"
     }
     headers = {'Content-Type': 'application/json'}
-
     sw_resp = requests.post(url=sw_url, headers=headers, data=json.dumps(payload))
     if not sw_resp.ok:
         raise RuntimeError(f"ServiceWizard error, with code {sw_resp.status_code}. \n{sw_resp.text}")
@@ -36,7 +37,7 @@ def get_sample_service_url(sw_url, ss_release):
 
 
 def config(force_reload=False):
-    """wrapper for get config that reloads config every 'config_timeout' seconds"""
+    """Wrapper for fetching the config with an optional reload."""
     global _CONFIG_SINGLETON
     if not _CONFIG_SINGLETON:
         # could do this on module load, but let's delay until actually requested
@@ -74,6 +75,7 @@ class Config:
         for req in reqs:
             if not os.environ.get(req):
                 raise RuntimeError(f'{req} env var is not set.')
+        ws_token = os.environ['WORKSPACE_TOKEN']
         es_host = os.environ.get("ELASTICSEARCH_HOST", 'elasticsearch')
         es_port = os.environ.get("ELASTICSEARCH_PORT", 9200)
         kbase_endpoint = os.environ.get(
@@ -81,21 +83,18 @@ class Config:
         workspace_url = os.environ.get('WS_URL', kbase_endpoint + '/ws')
         catalog_url = os.environ.get('CATALOG_URL', kbase_endpoint + '/catalog')
         re_api_url = os.environ.get('RE_URL', kbase_endpoint + '/relation_engine_api').strip('/')
-        service_wizard_url = os.environ.get('SW_URL', kbase_endpoint + '/service_wizard').strip('/')
-        sample_service_release = os.environ.get('SAMPLE_SERVICE_RELEASE', 'dev')
-        sample_service_url = get_sample_service_url(service_wizard_url, sample_service_release)
-        config_url = os.environ.get('GLOBAL_CONFIG_URL')
-        github_release_url = os.environ.get(
-            'GITHUB_RELEASE_URL',
-            'https://api.github.com/repos/kbase/index_runner_spec/releases/latest'
+        sample_service_url = os.environ.get("SAMPLE_SERVICE_URL")
+        if sample_service_url is None:
+            service_wizard_url = os.environ.get('SW_URL', kbase_endpoint + '/service_wizard').strip('/')
+            sample_service_release = os.environ.get('SAMPLE_SERVICE_RELEASE', 'dev')
+            sample_service_url = _get_sample_service_url(service_wizard_url, sample_service_release)
+        config_url = os.environ.get('GLOBAL_CONFIG_URL', f"file://{os.getcwd()}/spec/config.yaml")
+        sample_ontology_config_url = os.environ.get(
+            'SAMPLE_ONTOLOGY_CONFIG_URL',
+            "https://github.com/kbase/sample_service_validator_config/releases/download/0.4/ontology_validators.yml"
         )
-        # Load the global configuration release (non-environment specific, public config)
-        if config_url and not config_url.startswith('http'):
-            raise RuntimeError(f"Invalid global config url: {config_url}")
-        if not github_release_url.startswith('http'):
-            raise RuntimeError(f"Invalid global github release url: {github_release_url}")
-        gh_token = os.environ.get('GITHUB_TOKEN')
-        global_config = _fetch_global_config(config_url, github_release_url, gh_token)
+        sample_ontology_config = _fetch_global_config(sample_ontology_config_url)
+        global_config = _fetch_global_config(config_url)
         skip_indices = _get_comma_delimited_env('SKIP_INDICES')
         allow_indices = _get_comma_delimited_env('ALLOW_INDICES')
         # Use a tempfile to indicate that the service is done booting up
@@ -104,16 +103,17 @@ class Config:
         msg_log_index_name = os.environ.get('MSG_LOG_INDEX_NAME', 'indexer_messages')
         if msg_log_index_name in global_config['latest_versions']:
             msg_log_index_name = global_config['latest_versions'][msg_log_index_name]
+        with open('VERSION') as fd:
+            app_version = fd.read().strip()
         self._cfg = {
+            'service_wizard_url': service_wizard_url,
             'skip_releng': os.environ.get('SKIP_RELENG'),
             'skip_features': os.environ.get('SKIP_FEATURES'),
             'skip_indices': skip_indices,
             'allow_indices': allow_indices,
             'global': global_config,
-            'github_release_url': github_release_url,
-            'github_token': gh_token,
             'global_config_url': config_url,
-            'ws_token': os.environ['WORKSPACE_TOKEN'],
+            'ws_token': ws_token,
             'mount_dir': os.environ.get('MOUNT_DIR', os.getcwd()),
             'kbase_endpoint': kbase_endpoint,
             'catalog_url': catalog_url,
@@ -121,9 +121,12 @@ class Config:
             're_api_url': re_api_url,
             're_api_token': os.environ['RE_API_TOKEN'],
             'sample_service_url': sample_service_url,
+            'sample_ontology_config_url': sample_ontology_config_url,
+            'sample_ontology_config': sample_ontology_config,
             'elasticsearch_host': es_host,
             'elasticsearch_port': es_port,
             'elasticsearch_url': f"http://{es_host}:{es_port}",
+            'es_batch_writes': int(os.environ.get('ES_BATCH_WRITES', 10000)),
             'kafka_server': os.environ.get('KAFKA_SERVER', 'kafka'),
             'kafka_clientgroup': os.environ.get('KAFKA_CLIENTGROUP', 'search_indexer'),
             'error_index_name': os.environ.get('ERROR_INDEX_NAME', 'indexing_errors'),
@@ -138,51 +141,36 @@ class Config:
             'proc_ready_path': proc_ready_path,  # File indicating the daemon is booted and ready
             'generic_shard_count': os.environ.get('GENERIC_SHARD_COUNT', 2),
             'generic_replica_count': os.environ.get('GENERIC_REPLICA_COUNT', 1),
+            'skip_types': _get_comma_delimited_env('SKIP_TYPES'),
+            'allow_types': _get_comma_delimited_env('ALLOW_TYPES'),
+            'max_handler_failures': int(os.environ.get('MAX_HANDLER_FAILURES', 3)),
+            'ws_client': WorkspaceClient(url=kbase_endpoint, token=ws_token),
+            'app_version': app_version,
         }
 
     def __getitem__(self, key):
         return self._cfg[key]
 
+    def __str__(self):
+        return json.dumps(self._cfg, indent=2)
 
-def _fetch_global_config(config_url, github_release_url, gh_token):
+
+def _fetch_global_config(config_url):
     """
-    Fetch the index_runner_spec configuration file from the Github release
-    using either the direct URL to the file or by querying the repo's release
-    info using the GITHUB API.
+    Fetch the index_runner_spec configuration file from a URL to a yaml file.
     """
-    if config_url:
-        print('Fetching config from the direct url')
-        # Fetch the config directly from config_url
-        with urllib.request.urlopen(config_url) as res:  # nosec
-            return yaml.safe_load(res)  # type: ignore
-    else:
-        print('Fetching config from the release info')
-        # Fetch the config url from the release info
-        if gh_token:
-            headers = {'Authorization': f'token {gh_token}'}
-        else:
-            headers = {}
-        tries = 0
-        # Sometimes Github returns usage errors and a retry will solve it
-        while True:
-            release_info = requests.get(github_release_url, headers=headers).json()
-            if release_info.get('assets'):
-                break
-            if tries == _FETCH_CONFIG_RETRIES:
-                raise RuntimeError(f"Cannot fetch config from {github_release_url}: {release_info}")
-            tries += 1
-        for asset in release_info['assets']:
-            if asset['name'] == 'config.yaml':
-                download_url = asset['browser_download_url']
-                with urllib.request.urlopen(download_url) as res:  # nosec
-                    return yaml.safe_load(res)
-        raise RuntimeError("Unable to load the config.yaml file from index_runner_spec")
+    logger.info(f'Fetching config from url: {config_url}')
+    # Fetch the config directly from config_url
+    with urllib.request.urlopen(config_url) as res:  # nosec
+        return yaml.safe_load(res.read())
 
 
-def _get_comma_delimited_env(key):
+def _get_comma_delimited_env(key: str) -> Optional[set]:
     """
     Fetch a comma-delimited list of strings from an environment variable as a set.
     """
+    if key not in os.environ:
+        return None
     ret = set()
     for piece in os.environ.get(key, '').split(','):
         piece = piece.strip()

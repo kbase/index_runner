@@ -1,16 +1,14 @@
-import os
-import uuid
-import json
-import shutil
-import docker
-import requests
-import logging
 from configparser import ConfigParser
+import docker
+import json
+import os
+import requests
+import shutil
+import uuid
 
-from src.utils.config import config
 from src.utils import ws_utils
-
-logger = logging.getLogger('IR')
+from src.utils.config import config
+from src.utils.logger import logger
 
 _DOCKER = docker.from_env()
 _SCRATCH = "/scratch"
@@ -199,7 +197,7 @@ def _get_sub_obj_index(indexer_app_vars):
     return sub_obj_index
 
 
-def index_from_sdk(obj_data, ws_info, obj_data_v1):
+def index_from_sdk(obj_data, ws_info, obj_data_v1, conf):
     """Index from an sdk application"""
     type_module, type_name, type_version = ws_utils.get_type_pieces(obj_data['info'][2])
 

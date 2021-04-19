@@ -1,13 +1,12 @@
 """
 Take object info from the workspace and import various vertices and edges into Arangodb.
 """
-import logging
-from kbase_workspace_client import WorkspaceClient
-
 from src.index_runner.releng import genome
+from src.index_runner.releng import samples
 from src.utils.ws_utils import get_type_pieces
 from src.utils.re_client import save
 from src.utils.config import config
+from src.utils.logger import logger
 from src.utils.formatting import (
     ts_to_epoch,
     get_method_key_from_prov,
@@ -15,12 +14,11 @@ from src.utils.formatting import (
     sanitize_arangodb_key
 )
 
-logger = logging.getLogger('IR')
-
 # need version specific processors here? Or expect the processor to handle all versions?
 # could also have an includes field to reduce the amount of data fetched from the ws
 _TYPE_PROCESSOR_MAP = {
-    'KBaseGenomes.Genome': genome.process_genome
+    'KBaseGenomes.Genome': genome.process_genome,
+    'KBaseSets.SampleSet': samples.process_sample_set
 }
 
 
@@ -31,6 +29,7 @@ def import_object(obj, ws_info):
     # TODO handle the ws_latest_version_of edge -- some tricky considerations here
     # Save the ws_object document
     obj_info = obj['info']
+    type_, _ = obj_info[2].split('-')  # 2nd var is version
     wsid = obj_info[6]
     objid = obj_info[0]
     obj_key = f'{wsid}:{objid}'
@@ -50,13 +49,11 @@ def import_object(obj, ws_info):
     _save_owner_edge(obj_ver_key, obj_info)
     _save_referral_edge(obj_ver_key, obj)
     _save_prov_desc_edge(obj_ver_key, obj)
-    type_, _ = obj_info[2].split('-')  # 2nd var is version
     if type_ in _TYPE_PROCESSOR_MAP:
         # this could use a lot of memory. There's a bunch of code in the workspace for
         # dealing with this situation, but that'd have to be ported to Python and it's pretty
         # complex, so YAGNI for now.
-        ws_client = WorkspaceClient(url=config()['kbase_endpoint'], token=config()['ws_token'])
-        resp = ws_client.admin_req('getObjects', {
+        resp = config()['ws_client'].admin_req('getObjects', {
             'objects': [{
                 'ref': obj_ver_key.replace(':', '/'),
             }]

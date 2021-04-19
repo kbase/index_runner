@@ -1,0 +1,9 @@
+#!/bin/sh
+set -euo xtrace
+
+# To be run outside the docker container for development and testing
+
+docker-compose down -v
+docker-compose pull
+docker-compose build
+docker-compose up app

@@ -3,50 +3,60 @@ Main entrypoint for the app and the Kafka topic consumer.
 Sends work to the es_indexer or the releng_importer.
 Generally handles every message synchronously. Duplicate the service to get more parallelism.
 """
-import logging
-import json
-import time
-import os
-import atexit
-import signal
-import hashlib
-from kbase_workspace_client import WorkspaceClient
 from kbase_workspace_client.exceptions import WorkspaceResponseError
+import atexit
+import hashlib
+import json
+import os
+import signal
+import time
 
 from src.index_runner import event_loop
-import src.utils.kafka as kafka
-from src.utils.logger import init_logger
-import src.utils.es_utils as es_utils
-import src.utils.re_client as re_client
+from src.utils.config import config
+from src.utils.logger import logger
+from src.utils.service_utils import wait_for_dependencies
+from src.utils.ws_utils import get_obj_type, log_error
 import src.index_runner.es_indexer as es_indexer
 import src.index_runner.releng_importer as releng_importer
-from src.utils.config import config
-from src.utils.service_utils import wait_for_dependencies
-
-logger = logging.getLogger('IR')
-ws_client = WorkspaceClient(url=config()['kbase_endpoint'], token=config()['ws_token'])
+import src.utils.es_utils as es_utils
+import src.utils.kafka as kafka
+import src.utils.re_client as re_client
 
 
 def _handle_msg(msg):
     event_type = msg.get('evtype')
     if not event_type:
-        logger.warning(f"Missing 'evtype' in event: {msg}")
-        return
+        msg = f"Missing 'evtype' in event: {msg}"
+        logger.error(msg)
+        raise RuntimeError(msg)
+    objtype = get_obj_type(msg)
+    if objtype is not None and isinstance(objtype, str) and len(objtype) > 0:
+        # Check the type against the configured whitelist or blacklist, if present
+        whitelist = config()['allow_types']
+        blacklist = config()['skip_types']
+        if whitelist is not None and objtype not in whitelist:
+            logger.warning(f"Type {objtype} is not in ALLOW_TYPES, skipping")
+            return
+        if blacklist is not None and objtype in blacklist:
+            logger.warning(f"Type {objtype} is in SKIP_TYPES, skipping")
+            return
     if event_type in ['REINDEX', 'NEW_VERSION', 'COPY_OBJECT', 'RENAME_OBJECT']:
+        # Index a single workspace object
         obj = _fetch_obj_data(msg)
         ws_info = _fetch_ws_info(msg)
+        _reindex_narrative(obj, ws_info)
         if not config()['skip_releng']:
             releng_importer.run_importer(obj, ws_info, msg)
         es_indexer.run_indexer(obj, ws_info, msg)
     elif event_type == 'REINDEX_WS' or event_type == 'CLONE_WORKSPACE':
         # Reindex all objects in a workspace, overwriting existing data
-        for objinfo in ws_client.generate_obj_infos(msg['wsid'], admin=True):
+        for objinfo in config()['ws_client'].generate_obj_infos(msg['wsid'], admin=True):
             objid = objinfo[0]
             kafka.produce({'evtype': 'REINDEX', 'wsid': msg['wsid'], 'objid': objid},
                           callback=_delivery_report)
     elif event_type == 'INDEX_NONEXISTENT_WS':
         # Reindex all objects in a workspace without overwriting any existing data
-        for objinfo in ws_client.generate_obj_infos(msg['wsid'], admin=True):
+        for objinfo in config()['ws_client'].generate_obj_infos(msg['wsid'], admin=True):
             objid = objinfo[0]
             kafka.produce({'evtype': 'INDEX_NONEXISTENT', 'wsid': msg['wsid'], 'objid': objid},
                           callback=_delivery_report)
@@ -80,12 +90,14 @@ def _handle_msg(msg):
         es_indexer.set_perms(msg)
         if not config()['skip_releng']:
             releng_importer.set_perms(msg)
+    elif event_type == 'SET_PERMISSION':
+        # Share the narrative with users
+        es_indexer.set_user_perms(msg)
     elif event_type == 'RELOAD_ELASTIC_ALIASES':
         # Reload aliases on ES from the global config file
         es_indexer.reload_aliases()
     else:
         logger.warning(f"Unrecognized event {event_type}.")
-        return
 
 
 def _log_msg_to_elastic(msg):
@@ -109,11 +121,11 @@ def _fetch_obj_data(msg):
     if msg.get('ver'):
         obj_ref += f"/{msg['ver']}"
     try:
-        obj_data = ws_client.admin_req('getObjects', {
+        obj_data = config()['ws_client'].admin_req('getObjects', {
             'objects': [{'ref': obj_ref}]
         })
     except WorkspaceResponseError as err:
-        logger.error(f'Workspace response error: {err.resp_data}')
+        log_error(err)
         # Workspace is deleted; ignore the error
         if (err.resp_data and isinstance(err.resp_data, dict)
                 and err.resp_data['error'] and isinstance(err.resp_data['error'], dict)
@@ -132,13 +144,29 @@ def _fetch_ws_info(msg):
     if not msg.get('wsid'):
         raise RuntimeError(f'Cannot get workspace info from msg: {msg}')
     try:
-        ws_info = ws_client.admin_req('getWorkspaceInfo', {
+        ws_info = config()['ws_client'].admin_req('getWorkspaceInfo', {
             'id': msg['wsid']
         })
     except WorkspaceResponseError as err:
         logger.error(f'Workspace response error: {err.resp_data}')
         raise err
     return ws_info
+
+
+def _reindex_narrative(obj, ws_info: dict) -> None:
+    obj_type = obj['info'][2]
+    if 'Narrative' in obj_type:
+        return
+    meta = ws_info[-1]
+    if not isinstance(meta, dict) or meta.get('narrative') != '1':
+        logger.debug("This workspace is not a narrative")
+        return
+    wsid = ws_info[0]
+    narr_info = config()['ws_client'].find_narrative(wsid, admin=True)
+    objid = narr_info[0]
+    # Publish an event to reindex the narrative
+    ev = {'evtype': 'REINDEX', 'wsid': wsid, 'objid': objid}
+    kafka.produce(ev, callback=_delivery_report)
 
 
 def _log_err_to_es(msg, err=None):
@@ -162,21 +190,27 @@ def _delivery_report(err, msg):
         logger.info(f'Message delivered to {msg.topic()}')
 
 
-def main():
-    # Set up the logger
-    # Make the urllib debug logs less noisy
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
-    init_logger(logger)
+def _exit_handler(consumer):
+    def handler(signum, stack_frame):
+        kafka.close_consumer(consumer)
 
+    def handler_noargs():
+        kafka.close_consumer(consumer)
+
+    return (handler, handler_noargs)
+
+
+def main():
     # Initialize and run the Kafka consumer
     topics = [
-            config()['topics']['workspace_events'],
-            config()['topics']['admin_events']
-        ]
+        config()['topics']['workspace_events'],
+        config()['topics']['admin_events']
+    ]
     consumer = kafka.init_consumer(topics)
-    atexit.register(lambda signum, stack_frame: kafka.close_consumer(consumer))
-    signal.signal(signal.SIGTERM, lambda signum, stack_frame: kafka.close_consumer(consumer))
-    signal.signal(signal.SIGINT, lambda signum, stack_frame: kafka.close_consumer(consumer))
+    (handler, handler_noargs) = _exit_handler(consumer)
+    atexit.register(handler_noargs)
+    signal.signal(signal.SIGTERM, handler)
+    signal.signal(signal.SIGINT, handler)
 
     # Run the main thread
     event_loop.start_loop(
@@ -184,8 +218,7 @@ def main():
         _handle_msg,
         on_success=_log_msg_to_elastic,
         on_failure=_log_err_to_es,
-        on_config_update=es_indexer.reload_aliases,
-        logger=logger)
+        on_config_update=es_indexer.reload_aliases)
 
 
 if __name__ == '__main__':

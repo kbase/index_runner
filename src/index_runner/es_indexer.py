@@ -5,9 +5,9 @@ Takes workspace kafka event data and generates new Elasticsearch index upates
 import json
 import requests
 import time
-import logging
 from enum import Enum
 
+from src.utils.logger import logger
 from src.utils.config import config
 from src.utils.ws_utils import get_type_pieces
 from src.index_runner.es_indexers.main import index_obj
@@ -23,9 +23,7 @@ _IDX = _PREFIX + ".*"
 _GLOBAL_MAPPINGS = config()['global']['global_mappings']
 _HEADERS = {"Content-Type": "application/json"}
 _MAPPINGS = config()['global']['mappings']
-_BATCH_WRITE_MAX = 1000
-
-logger = logging.getLogger('IR')
+_DEFAULT_SEARCH_ALIAS = 'default_search'
 
 
 def init_indexes():
@@ -37,6 +35,7 @@ def init_indexes():
         if mapping.get('global_mappings'):
             for g_map in mapping['global_mappings']:
                 global_mappings.update(_GLOBAL_MAPPINGS[g_map])
+        global_mappings.update(_GLOBAL_MAPPINGS.get('all', {}))
         _init_index(index, {**mapping['properties'], **global_mappings})
 
 
@@ -59,7 +58,7 @@ def reload_aliases():
                 names = group_aliases[alias_name]
                 raise RuntimeError(f"Failed creating alias name: {alias_name}, "
                                    f"for indices: {names}..\nerror: {err}")
-        logger.info(f"Reloaded elasticsearch aliases")
+        logger.info("Reloaded elasticsearch aliases")
 
 
 def run_indexer(obj, ws_info, msg):
@@ -69,7 +68,7 @@ def run_indexer(obj, ws_info, msg):
         action = data['_action']
         if action == 'index':
             batch_writes.append(data)
-            if len(batch_writes) >= _BATCH_WRITE_MAX:
+            if len(batch_writes) >= config()['es_batch_writes']:
                 count = len(batch_writes)
                 _write_to_elastic(batch_writes)
                 logger.info(f'Indexing of {count} docs on ES took {time.time() - start}s')
@@ -159,6 +158,21 @@ def set_perms(msg):
     )
 
 
+def set_user_perms(msg):
+    """
+    Set user permissions for a workspace. Handles the SET_PERMISSION event.
+    This only updates the `shared_users` field for the workspace/narrative.
+    """
+    wsid = int(msg['wsid'])
+    perms = config()['ws_client'].admin_req('getPermissionsMass', {
+        'workspaces': [{"id": wsid}]
+    })
+    shared_users = perms['perms'][0].keys()
+    update = f"ctx._source.shared_users={list(shared_users)}"
+    resp = _update_by_query({'term': {'access_group': wsid}}, update, config())
+    return resp
+
+
 # -- Utils
 
 def _init_generic_index(msg):
@@ -170,9 +184,11 @@ def _init_generic_index(msg):
         full_type_name - string - eg. "Module.Type-X.Y"
     """
     (_, type_name, type_ver) = get_type_pieces(msg['full_type_name'])
-    index_name = type_name.lower()
+    index_name = type_name.lower() + '_0'
     mappings = {**_GLOBAL_MAPPINGS['ws_auth'], **_GLOBAL_MAPPINGS['ws_object']}
-    _init_index(index_name + '_0', mappings)
+    _init_index(index_name, mappings)
+    # Update the 'default_search' alias to include this index
+    _create_alias(_DEFAULT_SEARCH_ALIAS, f"{_PREFIX}.{index_name}")
 
 
 def _write_to_elastic(data):
@@ -196,7 +212,8 @@ def _write_to_elastic(data):
             }
         })
         json_body += '\n'
-        json_body += json.dumps(datum['doc'])
+        doc = _global_doc_defaults(datum['doc'])
+        json_body += json.dumps(doc)
         json_body += '\n'
     # Save the documents using the elasticsearch http api
     resp = requests.post(f"{_ES_URL}/_bulk", data=json_body, headers={"Content-Type": "application/json"})
@@ -205,14 +222,25 @@ def _write_to_elastic(data):
         raise RuntimeError(f"Error saving to elasticsearch:\n{resp.text}")
 
 
+def _global_doc_defaults(doc: dict):
+    """
+    Set defaults in any doc we save to elasticsearch
+    Args:
+        doc - data we are saving to elastic
+    Mutates doc
+    """
+    doc['index_runner_ver'] = config()['app_version']
+    return doc
+
+
 def _update_by_query(query, script, config):
     url = f"{_ES_URL}/{_IDX}/_update_by_query"
     resp = requests.post(
         url,
         params={
             'conflicts': 'proceed',
-            'wait_for_completion': True,
-            'refresh': True
+            'wait_for_completion': 'true',
+            'refresh': 'true',
         },
         data=json.dumps({
             'query': query,
@@ -222,6 +250,7 @@ def _update_by_query(query, script, config):
     )
     if not resp.ok:
         raise RuntimeError(f'Error updating by query:\n{resp.text}')
+    return resp
 
 
 def _create_alias(alias_name, index_names):
@@ -265,7 +294,6 @@ def _put_mapping(index_name, mapping):
     """
     Create or update the type mapping for a given index.
     """
-    # type_name = config()['global']['es_type_global_name']
     url = f"{_ES_URL}/{index_name}/_mapping"
     resp = requests.put(
         url,
