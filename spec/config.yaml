@@ -107,7 +107,6 @@ aliases:
     - assembly_2
     - genome_2
     - pangenome_1
-    - pangenome_orthologfamily_1
     - taxon_2
     - tree_1
     - matrix_1
@@ -118,7 +117,6 @@ aliases:
     - narrative_2
   reads:
     - reads_2
-    - reads_1
   assembly:
     - assembly_2
   genome:
