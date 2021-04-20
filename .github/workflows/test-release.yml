@@ -1,7 +1,7 @@
 # This workflow will install Python dependencies, run tests and lint with a variety of Python versions
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: Run tests
+name: Run tests and build docker iamges
 
 on:
   push:
@@ -29,6 +29,33 @@ jobs:
       env:
         WORKSPACE_TOKEN: ${{ secrets.WORKSPACE_TOKEN }}
         RE_API_TOKEN: ${{ secrets.RE_API_TOKEN }}
+
+    # Build and Push (if we get here)
+    - name: Get current date
+      id: date
+      run: echo "::set-output name=date::$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+    - name: Login to GitHub Container Registry (GHCR)
+      uses: docker/login-action@v1
+      with:
+        registry: ghcr.io
+        username: ${{ secrets.GHCR_USERNAME }}
+        password: ${{ secrets.GHCR_TOKEN }}
+    - name: Build and push
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        file: ./Dockerfile
+        pull: true
+        push: true
+        build-args: |
+          BUILD_CONFIG=ci
+          BUILD_DATE=${{ steps.date.outputs.date }}
+          VCS_REF=${{ github.sha }}
+          BRANCH=${{ github.ref }}
+          TAG=${{ github.ref }}
+        tags: ghcr.io/${{ github.repository_owner }}/index_runner:${{ env.CI_ACTION_REF_NAME }}
 
 #  release:
 #    runs-on: ubuntu-latest
