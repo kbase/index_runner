@@ -5,6 +5,7 @@ ARG BUILD_DATE
 ARG VCS_REF
 ARG BRANCH=develop
 ENV DOCKERIZE_VERSION v0.6.1
+ENV CRYPTOGRAPHY_DONT_BUILD_RUST 1
 
 # Install dockerize
 RUN apk --update add --virtual deps curl tar gzip && \
