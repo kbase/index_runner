@@ -78,6 +78,7 @@ class Config:
         ws_token = os.environ['WORKSPACE_TOKEN']
         es_host = os.environ.get("ELASTICSEARCH_HOST", 'elasticsearch')
         es_port = os.environ.get("ELASTICSEARCH_PORT", 9200)
+        poll_timeout = int(os.environ.get("POLL_TIMEOUT", "600000"))
         kbase_endpoint = os.environ.get(
             'KBASE_ENDPOINT', 'https://ci.kbase.us/services').strip('/')
         workspace_url = os.environ.get('WS_URL', kbase_endpoint + '/ws')
