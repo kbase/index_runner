@@ -1,6 +1,6 @@
 # Strategies for linking genome features to GO terms in the KBase Relation Engine
 
-## Background 
+## Background
 
 When a genome is indexed into the RE, the following happens:
 
