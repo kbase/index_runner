@@ -44,7 +44,8 @@ def _handle_msg(msg):
         # Index a single workspace object
         obj = _fetch_obj_data(msg)
         ws_info = _fetch_ws_info(msg)
-        _reindex_narrative(obj, ws_info)
+        if not config()['skip_narrative_reindex']:
+            _reindex_narrative(obj, ws_info)
         if not config()['skip_releng']:
             releng_importer.run_importer(obj, ws_info, msg)
         es_indexer.run_indexer(obj, ws_info, msg)
