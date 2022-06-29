@@ -97,6 +97,8 @@ class Config:
         sample_ontology_config = _fetch_global_config(sample_ontology_config_url)
         global_config = _fetch_global_config(config_url)
         skip_indices = _get_comma_delimited_env('SKIP_INDICES')
+        skip_workspaces = _get_comma_delimited_env('SKIP_WORKSPACES')
+        max_object_reindex = int(os.environ.get('MAX_OBJECT_REINDEX', '500'))
         allow_indices = _get_comma_delimited_env('ALLOW_INDICES')
         # Use a tempfile to indicate that the service is done booting up
         proc_ready_path = '/tmp/IR_READY'  # nosec
@@ -111,6 +113,8 @@ class Config:
             'skip_releng': os.environ.get('SKIP_RELENG'),
             'skip_features': os.environ.get('SKIP_FEATURES'),
             'skip_indices': skip_indices,
+            'skip_workspaces': skip_workspaces,
+            'max_object_reindex': max_object_reindex,
             'allow_indices': allow_indices,
             'global': global_config,
             'global_config_url': config_url,
