@@ -115,6 +115,7 @@ class Config:
             'skip_indices': skip_indices,
             'skip_workspaces': skip_workspaces,
             'max_object_reindex': max_object_reindex,
+            'poll_timeout': poll_timeout,
             'allow_indices': allow_indices,
             'global': global_config,
             'global_config_url': config_url,
