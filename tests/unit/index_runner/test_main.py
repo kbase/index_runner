@@ -55,9 +55,9 @@ def test_skip_workspace():
     """
     Test that an event from a workspace in skip_workspaces is skipped.
     """
-    with set_env(SKIP_WORKSPACES='123'):
+    with set_env(SKIP_WORKSPACES='123,124'):
         config(force_reload=True)
-        res = _handle_msg({'objtype': 'abc', 'evtype': 'REINDEX', 'wsid': '123'})
+        res = _handle_msg({'objtype': 'abc', 'evtype': 'REINDEX', 'wsid': 123})
     assert res is None
 
 def test_skip_reindex():

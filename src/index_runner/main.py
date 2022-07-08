@@ -42,9 +42,8 @@ def _handle_msg(msg):
             return
     if event_type in ['REINDEX', 'NEW_VERSION', 'COPY_OBJECT', 'RENAME_OBJECT']:
         # Skip any workspaces in the skip list
-        skip_workspaces = config()['skip_workspaces']
         wsid = msg['wsid']
-        if skip_workspaces and wsid in skip_workspaces:
+        if wsid in config()['skip_workspaces']:
             logger.warning(f"Workspace {wsid} in skip list, skipping")
             return
         # Index a single workspace object
