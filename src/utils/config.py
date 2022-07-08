@@ -85,6 +85,9 @@ class Config:
         catalog_url = os.environ.get('CATALOG_URL', kbase_endpoint + '/catalog')
         re_api_url = os.environ.get('RE_URL', kbase_endpoint + '/relation_engine_api').strip('/')
         sample_service_url = os.environ.get("SAMPLE_SERVICE_URL")
+        skip_narrative_reindex = False
+        if os.environ.get("SKIP_NARRATIVE_REINDEX"):
+            skip_narrative_reindex = True
         if sample_service_url is None:
             service_wizard_url = os.environ.get('SW_URL', kbase_endpoint + '/service_wizard').strip('/')
             sample_service_release = os.environ.get('SAMPLE_SERVICE_RELEASE', 'dev')
@@ -116,6 +119,7 @@ class Config:
             'skip_workspaces': skip_workspaces,
             'max_object_reindex': max_object_reindex,
             'poll_timeout': poll_timeout,
+            'skip_narrative_reindex': skip_narrative_reindex,
             'allow_indices': allow_indices,
             'global': global_config,
             'global_config_url': config_url,
@@ -138,6 +142,7 @@ class Config:
             'error_index_name': os.environ.get('ERROR_INDEX_NAME', 'indexing_errors'),
             'msg_log_index_name': msg_log_index_name,
             'elasticsearch_index_prefix': os.environ.get('ELASTICSEARCH_INDEX_PREFIX', 'search2'),
+            'poll_timeout': poll_timeout,
             'topics': {
                 'workspace_events': os.environ.get('KAFKA_WORKSPACE_TOPIC', 'workspaceevents'),
                 'admin_events': os.environ.get('KAFKA_ADMIN_TOPIC', 'indexeradminevents')
