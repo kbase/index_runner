@@ -112,6 +112,7 @@ class Config:
         self._cfg = {
             'service_wizard_url': service_wizard_url,
             'skip_releng': os.environ.get('SKIP_RELENG'),
+            'skip_es': os.environ.get('SKIP_ES'),
             'skip_features': os.environ.get('SKIP_FEATURES'),
             'skip_indices': skip_indices,
             'skip_narrative_reindex': skip_narrative_reindex,

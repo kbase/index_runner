@@ -1,0 +1,10 @@
+# Mapping of KBase type names to index names
+ws_type_to_indexes: {}
+
+# SDK apps used for indexing, map from type_module.type_name -> {'sdk_func': _, 'sdk_app': _, 'sdk_version':
+sdk_indexer_apps: {}
+
+ws_subobjects: []
+
+# Types to always avoid indexing or importing
+ws_type_blacklist: []

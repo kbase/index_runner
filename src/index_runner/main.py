@@ -48,7 +48,8 @@ def _handle_msg(msg):
             _reindex_narrative(obj, ws_info)
         if not config()['skip_releng']:
             releng_importer.run_importer(obj, ws_info, msg)
-        es_indexer.run_indexer(obj, ws_info, msg)
+        if not config()['skip_es']:
+            es_indexer.run_indexer(obj, ws_info, msg)
     elif event_type == 'REINDEX_WS' or event_type == 'CLONE_WORKSPACE':
         # Reindex all objects in a workspace, overwriting existing data
         for objinfo in config()['ws_client'].generate_obj_infos(msg['wsid'], admin=True):
@@ -74,29 +75,34 @@ def _handle_msg(msg):
         ws_info = _fetch_ws_info(msg)
         if re_required:
             releng_importer.run_importer(obj, ws_info, msg)
-        if es_required:
+        if es_required and not config()['skip_es']:
             es_indexer.run_indexer(obj, ws_info, msg)
     elif event_type == 'OBJECT_DELETE_STATE_CHANGE':
         # Delete the object on RE and ES. Synchronous for now.
-        es_indexer.delete_obj(msg)
+        if not config()['skip_es']:
+            es_indexer.delete_obj(msg)
         if not config()['skip_releng']:
             releng_importer.delete_obj(msg)
     elif event_type == 'WORKSPACE_DELETE_STATE_CHANGE':
         # Delete everything in RE and ES under this workspace
-        es_indexer.delete_ws(msg)
+        if not config()['skip_es']:
+            es_indexer.delete_ws(msg)
         if not config()['skip_releng']:
             releng_importer.delete_ws(msg)
     elif event_type == 'SET_GLOBAL_PERMISSION':
         # Set the `is_public` permissions for a workspace
-        es_indexer.set_perms(msg)
+        if not config()['skip_es']:
+            es_indexer.set_perms(msg)
         if not config()['skip_releng']:
             releng_importer.set_perms(msg)
     elif event_type == 'SET_PERMISSION':
         # Share the narrative with users
-        es_indexer.set_user_perms(msg)
+        if not config()['skip_es']:
+            es_indexer.set_user_perms(msg)
     elif event_type == 'RELOAD_ELASTIC_ALIASES':
         # Reload aliases on ES from the global config file
-        es_indexer.reload_aliases()
+        if not config()['skip_es']:
+            es_indexer.reload_aliases()
     else:
         logger.warning(f"Unrecognized event {event_type}.")
 
@@ -228,9 +234,10 @@ if __name__ == '__main__':
         os.remove(config()['proc_ready_path'])
     # Wait for dependency services (ES and RE) to be live
     wait_for_dependencies(timeout=180)
-    # Database initialization
-    es_indexer.init_indexes()
-    es_indexer.reload_aliases()
+    if not config()['skip_es']:
+        # Database initialization
+        es_indexer.init_indexes()
+        es_indexer.reload_aliases()
     # Touch a temp file indicating the daemon is ready
     with open(config()['proc_ready_path'], 'w') as fd:
         fd.write('')
