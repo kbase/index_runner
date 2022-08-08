@@ -6,5 +6,7 @@ sdk_indexer_apps: {}
 
 ws_subobjects: []
 
+latest_versions: {}
+
 # Types to always avoid indexing or importing
 ws_type_blacklist: []
