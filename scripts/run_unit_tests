@@ -9,4 +9,5 @@ export PYTHONPATH=.
 export $(cat tests/test.env | xargs)
 # Allow users to set test args
 args=${@:-"tests/unit"}
+scripts/lint
 poetry run pytest $args
