@@ -145,7 +145,6 @@ class Config:
             'error_index_name': os.environ.get('ERROR_INDEX_NAME', 'indexing_errors'),
             'msg_log_index_name': msg_log_index_name,
             'elasticsearch_index_prefix': os.environ.get('ELASTICSEARCH_INDEX_PREFIX', 'search2'),
-            'poll_timeout': poll_timeout,
             'topics': {
                 'workspace_events': os.environ.get('KAFKA_WORKSPACE_TOPIC', 'workspaceevents'),
                 'admin_events': os.environ.get('KAFKA_ADMIN_TOPIC', 'indexeradminevents')
