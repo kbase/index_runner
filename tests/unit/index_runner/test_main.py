@@ -2,7 +2,7 @@ import pytest
 import responses
 
 from tests.helpers import set_env
-from src.index_runner.main import _handle_msg
+from src.index_runner.main import _handle_msg, _reindex_narrative
 from src.utils.config import config
 
 # Allow requests to the service wizard (which happens in config)
@@ -51,6 +51,22 @@ def test_handle_msg_allow_types2():
             _handle_msg({'objtype': 'xyz'})
     assert str(ctx.value) == "Missing 'evtype' in event: {'objtype': 'xyz'}"
 
+def test_skip_workspace():
+    """
+    Test that an event from a workspace in skip_workspaces is skipped.
+    """
+    with set_env(SKIP_WORKSPACES='123,124'):
+        config(force_reload=True)
+        res = _handle_msg({'objtype': 'abc', 'evtype': 'REINDEX', 'wsid': 123})
+    assert res is None
+
+def test_skip_reindex():
+    """
+    Test that a large workspace doesn't cause a reindex
+    """
+    ws_info = [123, 'auser:narrative_1653154144334', 'auser', '2022-06-28T16:02:17+0000', 1000, 'n', 'n', 'unlocked', {}]
+    res = _reindex_narrative(None, ws_info)
+    assert res is None
 
 @responses.activate
 def test_handle_msg_no_objtype():

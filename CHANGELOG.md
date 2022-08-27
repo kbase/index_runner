@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.20] - 2022-06-15
+
+### Added
+- Configuration parameter for max objects in a workspace to skip narrative reindex
+- Configuration option to skip narrative reindex for certain workspaces
+- Configuration option for poll timeout
+- Configuration option to skip narrative reindexing
+
 ## [1.9.19] - 2021-04-19
 
 ### Fixed

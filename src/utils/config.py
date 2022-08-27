@@ -78,12 +78,16 @@ class Config:
         ws_token = os.environ['WORKSPACE_TOKEN']
         es_host = os.environ.get("ELASTICSEARCH_HOST", 'elasticsearch')
         es_port = os.environ.get("ELASTICSEARCH_PORT", 9200)
+        poll_timeout = int(os.environ.get("POLL_TIMEOUT", "600000"))
         kbase_endpoint = os.environ.get(
             'KBASE_ENDPOINT', 'https://ci.kbase.us/services').strip('/')
         workspace_url = os.environ.get('WS_URL', kbase_endpoint + '/ws')
         catalog_url = os.environ.get('CATALOG_URL', kbase_endpoint + '/catalog')
         re_api_url = os.environ.get('RE_URL', kbase_endpoint + '/relation_engine_api').strip('/')
         sample_service_url = os.environ.get("SAMPLE_SERVICE_URL")
+        skip_narrative_reindex = False
+        if os.environ.get("SKIP_NARRATIVE_REINDEX"):
+            skip_narrative_reindex = True
         if sample_service_url is None:
             service_wizard_url = os.environ.get('SW_URL', kbase_endpoint + '/service_wizard').strip('/')
             sample_service_release = os.environ.get('SAMPLE_SERVICE_RELEASE', 'dev')
@@ -96,6 +100,11 @@ class Config:
         sample_ontology_config = _fetch_global_config(sample_ontology_config_url)
         global_config = _fetch_global_config(config_url)
         skip_indices = _get_comma_delimited_env('SKIP_INDICES')
+        skip_workspaces = set()
+        if 'SKIP_WORKSPACES' in os.environ:
+            for ws in  _get_comma_delimited_env('SKIP_WORKSPACES'):
+                skip_workspaces.add(int(ws))
+        max_object_reindex = int(os.environ.get('MAX_OBJECT_REINDEX', '500'))
         allow_indices = _get_comma_delimited_env('ALLOW_INDICES')
         # Use a tempfile to indicate that the service is done booting up
         proc_ready_path = '/tmp/IR_READY'  # nosec
@@ -110,6 +119,10 @@ class Config:
             'skip_releng': os.environ.get('SKIP_RELENG'),
             'skip_features': os.environ.get('SKIP_FEATURES'),
             'skip_indices': skip_indices,
+            'skip_workspaces': skip_workspaces,
+            'max_object_reindex': max_object_reindex,
+            'poll_timeout': poll_timeout,
+            'skip_narrative_reindex': skip_narrative_reindex,
             'allow_indices': allow_indices,
             'global': global_config,
             'global_config_url': config_url,
