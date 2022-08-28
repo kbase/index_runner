@@ -102,7 +102,7 @@ class Config:
         skip_indices = _get_comma_delimited_env('SKIP_INDICES')
         skip_workspaces = set()
         if 'SKIP_WORKSPACES' in os.environ:
-            for ws in  _get_comma_delimited_env('SKIP_WORKSPACES'):
+            for ws in _get_comma_delimited_env('SKIP_WORKSPACES'):
                 skip_workspaces.add(int(ws))
         max_object_reindex = int(os.environ.get('MAX_OBJECT_REINDEX', '500'))
         allow_indices = _get_comma_delimited_env('ALLOW_INDICES')
