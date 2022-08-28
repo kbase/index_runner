@@ -41,6 +41,11 @@ def _handle_msg(msg):
             logger.warning(f"Type {objtype} is in SKIP_TYPES, skipping")
             return
     if event_type in ['REINDEX', 'NEW_VERSION', 'COPY_OBJECT', 'RENAME_OBJECT']:
+        # Skip any workspaces in the skip list
+        wsid = msg['wsid']
+        if wsid in config()['skip_workspaces']:
+            logger.warning(f"Workspace {wsid} in skip list, skipping")
+            return
         # Index a single workspace object
         obj = _fetch_obj_data(msg)
         ws_info = _fetch_ws_info(msg)
@@ -161,6 +166,11 @@ def _fetch_ws_info(msg):
 
 
 def _reindex_narrative(obj, ws_info: dict) -> None:
+    # Skip narrative reindex if there are too many objects
+    if ws_info[4] > config()['max_object_reindex']:
+        m = "Skipping narrative reindex for %d (too many objects)" % (ws_info[0])
+        logger.info(m)
+        return
     obj_type = obj['info'][2]
     if 'Narrative' in obj_type:
         return

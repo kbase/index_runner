@@ -100,6 +100,11 @@ class Config:
         sample_ontology_config = _fetch_global_config(sample_ontology_config_url)
         global_config = _fetch_global_config(config_url)
         skip_indices = _get_comma_delimited_env('SKIP_INDICES')
+        skip_workspaces = set()
+        if 'SKIP_WORKSPACES' in os.environ:
+            for ws in  _get_comma_delimited_env('SKIP_WORKSPACES'):
+                skip_workspaces.add(int(ws))
+        max_object_reindex = int(os.environ.get('MAX_OBJECT_REINDEX', '500'))
         allow_indices = _get_comma_delimited_env('ALLOW_INDICES')
         # Use a tempfile to indicate that the service is done booting up
         proc_ready_path = '/tmp/IR_READY'  # nosec
@@ -115,6 +120,9 @@ class Config:
             'skip_es': os.environ.get('SKIP_ES'),
             'skip_features': os.environ.get('SKIP_FEATURES'),
             'skip_indices': skip_indices,
+            'skip_workspaces': skip_workspaces,
+            'max_object_reindex': max_object_reindex,
+            'poll_timeout': poll_timeout,
             'skip_narrative_reindex': skip_narrative_reindex,
             'allow_indices': allow_indices,
             'global': global_config,
@@ -138,7 +146,6 @@ class Config:
             'error_index_name': os.environ.get('ERROR_INDEX_NAME', 'indexing_errors'),
             'msg_log_index_name': msg_log_index_name,
             'elasticsearch_index_prefix': os.environ.get('ELASTICSEARCH_INDEX_PREFIX', 'search2'),
-            'poll_timeout': poll_timeout,
             'topics': {
                 'workspace_events': os.environ.get('KAFKA_WORKSPACE_TOPIC', 'workspaceevents'),
                 'admin_events': os.environ.get('KAFKA_ADMIN_TOPIC', 'indexeradminevents')
