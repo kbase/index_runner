@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.21] - 2022-08-28
+
+### Added
+- Configuration parameter to disable elastic indexing
+- Mimimal configuration file for an RE only indexer
+
 ## [1.9.20] - 2022-06-15
 
 ### Added

@@ -10,13 +10,27 @@ sure to partition the topic to at least the number of running workers.
 
 ## Development
 
+### Dependencies
+
+Note that `docker-compose` 2.3+ is required to run the tests.
+
+In this project, python packages and dependencies are managed using poetry. To
+install the development dependencies, create and activate a python virtual
+environment and then run the `poetry install` command.
+
+### Running the tests
+
 Start the servers:
 
 ```sh
 docker-compose up
 ```
 
-Run the tests (servers need not be running, and will be shut down if they are):
+To run all the tests the `RE_API_TOKEN` and `WORKSPACE_TOKEN` environment
+variables must be set to admin tokens for the relation engine and workspace,
+respectively. This project is set up to read a `.env` file, so they may be set
+there. The following command will run the tests (servers need not be running,
+and will be shut down if they are):
 
 ```sh
 scripts/run_tests
@@ -82,7 +96,7 @@ Examples:
 
 Show command help: `indexer_admin -h`
 
-_Reindex a specific object_ 
+_Reindex a specific object_
 
 ```sh
 # Reindex only if the doc does not exist

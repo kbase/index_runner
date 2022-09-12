@@ -66,9 +66,9 @@ def test_skip_reindex():
     """
     Test that a large workspace doesn't cause a reindex
     """
-    ws_info = [123, 'auser:narrative_1653154144334', 'auser',
-               '2022-06-28T16:02:17+0000',
-               1001, 'n', 'n', 'unlocked', {}]
+    ws_info = [123, 'auser:narrative_1653154144334',
+               'auser', '2022-06-28T16:02:17+0000', 1000,
+               'n', 'n', 'unlocked', {}]
     res = _reindex_narrative(None, ws_info)
     assert res is None
 

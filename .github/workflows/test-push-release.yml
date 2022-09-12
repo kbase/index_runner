@@ -5,7 +5,7 @@ name: Run tests and build docker iamges
 
 on:
   push:
-    branches: [ develop, master ]
+    branches: [ develop, master, skip_es ]
     tags:
       - "*.*.*"
   pull_request_target:
