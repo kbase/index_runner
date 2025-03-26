@@ -10,4 +10,4 @@ export $(cat tests/test.env | xargs)
 # Allow users to set test args
 args=${@:-"tests/unit"}
 scripts/lint
-poetry run pytest $args
+poetry run pytest --cov=. --cov-report=term --cov-report=xml $args
