@@ -6,7 +6,7 @@ authors = ["KBase Team <info@kbase.us>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.9.19"
 kbase_workspace_client = "0.2.1"
 biopython = "1.77"
 docker = "4.2.2"
