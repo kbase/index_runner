@@ -29,10 +29,10 @@ RUN apk --update add librdkafka librdkafka-dev && ldconfig /usr/lib
 
 # Install dependencies
 COPY pyproject.toml poetry.lock /app/
-RUN apk --update add --virtual deps python3-dev build-base libffi-dev librdkafka-dev && \
-    pip install --upgrade pip poetry==2.1.2 && \
+RUN apk --update add --virtual deps python3-dev build-base libffi-dev && \
+    pip install --upgrade pip poetry==1.0.9 && \
     poetry config virtualenvs.create false && \
-    poetry install --without dev --no-interaction --no-ansi && \
+    poetry install --no-dev --no-interaction --no-ansi && \
     apk del deps
 
 # Make the admin tools executable
