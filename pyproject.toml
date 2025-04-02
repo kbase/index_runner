@@ -6,7 +6,7 @@ authors = ["KBase Team <info@kbase.us>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.9.19"
+python = "3.9.19"
 kbase_workspace_client = "0.2.1"
 biopython = "1.77"
 docker = "4.2.2"
@@ -14,7 +14,7 @@ PyYAML = "5.3.1"
 requests = "2.24.0"
 beautifulsoup4 = "4.9.1"
 markdown2 = "2.3.9"
-confluent-kafka = "1.5.0"
+confluent-kafka = "2.6.1"
 
 [tool.poetry.dev-dependencies]
 mypy = "0.782"
