@@ -897,6 +897,21 @@ pytest = ">=4.6"
 testing = ["fields", "hunter", "process-tests", "pytest-xdist", "six", "virtualenv"]
 
 [[package]]
+name = "pytest-timeout"
+version = "2.3.1"
+description = "pytest plugin to abort hanging tests"
+optional = false
+python-versions = ">=3.7"
+groups = ["dev"]
+files = [
+    {file = "pytest-timeout-2.3.1.tar.gz", hash = "sha256:12397729125c6ecbdaca01035b9e5239d4db97352320af155b3f5de1ba5165d9"},
+    {file = "pytest_timeout-2.3.1-py3-none-any.whl", hash = "sha256:68188cb703edfc6a18fad98dc25a3c61e9f24d644b0b70f33af545219fc7813e"},
+]
+
+[package.dependencies]
+pytest = ">=7.0.0"
+
+[[package]]
 name = "pywin32"
 version = "310"
 description = "Python for Window Extensions"
@@ -1219,4 +1234,4 @@ test = ["websockets"]
 [metadata]
 lock-version = "2.1"
 python-versions = "3.9.19"
-content-hash = "856c4f1cc5e1a80fc490243c1dc9fac7f69c7a18d13020fefb5dc63bd83c449b"
+content-hash = "95f4b91ced3edfb5acdc01daabbe8982d11f508cbfeaa35ac969d094a66c4a71"
