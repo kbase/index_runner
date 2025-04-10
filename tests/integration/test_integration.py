@@ -22,6 +22,7 @@ _TEST_EVENT = {
    "index_runner_ver": config()['app_version'],
 }
 
+
 @pytest.mark.timeout(1000)
 def test_integration():
     # Produce the new object event on Kafka
