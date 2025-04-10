@@ -24,7 +24,7 @@ services:
       - ${PWD}/scratch:/scratch
     env_file: 
       - tests/test.env
-      # - .env
+      - .env
 
   kafka:
     image: confluentinc/cp-kafka:5.0.0
