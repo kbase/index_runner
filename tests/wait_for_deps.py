@@ -11,7 +11,7 @@ from src.utils.config import config
 
 if __name__ == '__main__':
     tmp_ready_path = config()['proc_ready_path']
-    cmd = ["docker-compose", "exec", "app", "ls", tmp_ready_path]
+    cmd = ["docker", "compose", "exec", "app", "ls", tmp_ready_path]
     timeout = 180
     start = time.time()
     while True:
