@@ -48,7 +48,7 @@ jobs:
         echo "WORKSPACE_TOKEN=${{ secrets.WORKSPACE_TOKEN }}" > .env
         echo "RE_API_TOKEN=${{ secrets.RE_API_TOKEN }}" >> .env
         scripts/docker_reset
-        docker compose up
+        scripts/run_integration_tests
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
