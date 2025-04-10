@@ -45,7 +45,7 @@ jobs:
 
     - name: Run integration tests
       run: |
-        docker compose up
+        docker compose up -d
         scripts/run_integration_tests
 
     - name: Upload coverage to Codecov
