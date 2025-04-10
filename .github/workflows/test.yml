@@ -21,6 +21,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    env:
+      WORKSPACE_TOKEN: ${{ secrets.WORKSPACE_TOKEN }}
+      RE_API_TOKEN: ${{ secrets.RE_API_TOKEN }}
+
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -36,12 +40,14 @@ jobs:
     - name: Poetry installation
       run: poetry install
 
-    - name: Run tests
+    - name: Run unit tests
       run: scripts/run_unit_tests
-      env:
-        WORKSPACE_TOKEN: ${{ secrets.WORKSPACE_TOKEN }}
-        RE_API_TOKEN: ${{ secrets.RE_API_TOKEN }}
-    
+
+    - name: Run integration tests
+      run: |
+        docker compose up
+        scripts/run_integration_tests
+
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
