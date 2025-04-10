@@ -44,9 +44,7 @@ jobs:
       run: scripts/run_unit_tests
 
     - name: Run integration tests
-      run: |
-        docker compose up -d
-        scripts/run_integration_tests
+      run: scripts/run_integration_tests
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
