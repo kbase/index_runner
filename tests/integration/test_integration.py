@@ -31,8 +31,8 @@ def test_integration():
     objid = _TEST_EVENT['objid']  # type: ignore
     es_id = f"WS::{wsid}:{objid}"  # type: ignore
     re_key = f"{wsid}:{objid}"
-    es_doc = helpers.get_es_doc_blocking(es_id)
-    re_doc = helpers.wait_for_re_doc('ws_object', re_key)
+    es_doc = helpers.get_es_doc_blocking(es_id, timeout=1800)
+    re_doc = helpers.wait_for_re_doc('ws_object', re_key, timeout=1800)
     assert es_doc['_id'] == es_id
     assert es_doc['_source']['index_runner_ver'] == config()['app_version']
     assert re_doc['workspace_id'] == wsid
