@@ -4,5 +4,5 @@ set -euo xtrace
 
 # Remove everything in the docker-compose cluster and rebuild
 
-docker-compose down -v --remove-orphans --rmi all
-docker-compose build --no-cache
+docker compose down -v --remove-orphans --rmi all
+docker compose build --no-cache
