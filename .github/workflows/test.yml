@@ -51,6 +51,7 @@ jobs:
         scripts/run_integration_tests
 
     - name: Print Docker Compose logs
+      if: failure()
       run: docker compose logs
 
     - name: Upload coverage to Codecov
