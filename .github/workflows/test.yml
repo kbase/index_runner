@@ -50,6 +50,9 @@ jobs:
         scripts/docker_reset
         scripts/run_integration_tests
 
+    - name: Print Docker Compose logs
+      run: docker compose logs
+
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
