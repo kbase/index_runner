@@ -6,7 +6,6 @@ gets saved to ES and Arango.
 To test more detailed functionality of indexers/importers, write separate
 unit tests. Including them here will be too slow.
 """
-import pytest
 import tests.helpers as helpers
 
 from src.utils.config import config
@@ -23,7 +22,6 @@ _TEST_EVENT = {
 }
 
 
-@pytest.mark.timeout(1000)
 def test_integration():
     # Produce the new object event on Kafka
     helpers.produce(_TEST_EVENT)
