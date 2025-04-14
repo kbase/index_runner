@@ -47,7 +47,6 @@ jobs:
       run: |
         echo "WORKSPACE_TOKEN=$WORKSPACE_TOKEN" > .env
         echo "RE_API_TOKEN=$RE_API_TOKEN" >> .env
-        scripts/docker_reset
         scripts/run_integration_tests
 
     - name: Print Docker Compose logs

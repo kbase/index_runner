@@ -1,5 +1,3 @@
-version: '3'
-
 # This docker-compose is for developer convenience, not for running in production.
 
 # Uncomment platform: linux/amd64 if you get a "no matching manifest for linux/arm64/v8 in the manifest list entries" error
