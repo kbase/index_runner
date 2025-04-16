@@ -159,7 +159,7 @@ First, increment the versions found in `VERSION` and in `pyproject.toml`.
 
 Then, build the image and push to docker hub with `scripts/docker_deploy`.
 
-### Project anatomy
+### Project Anatomy
 
 * The main process and entrypoint for the app lives in `./src/index_runner/main.py`
 * The entrypoint for ES indexing is in `./src/index_runner/es_indexer.py`
