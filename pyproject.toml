@@ -17,7 +17,7 @@ markdown2 = "2.3.9"
 confluent-kafka = "2.6.1"
 
 [tool.poetry.group.dev.dependencies]
-mypy = "0.782"
+mypy = "1.18.2"
 bandit = "1.6.2"
 flake8 = "3.8.3"
 pytest = "7.4.0"
