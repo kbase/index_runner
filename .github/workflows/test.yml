@@ -1,0 +1,60 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Index Runner test
+
+on:
+  pull_request:
+    types:
+    - opened
+    - reopened
+    - synchronize
+    - ready_for_review
+  push:
+    # run workflow when merging to main or develop
+    branches:
+      - main
+      - master
+      - develop
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    env:
+      WORKSPACE_TOKEN: ${{ secrets.WORKSPACE_TOKEN }}
+      RE_API_TOKEN: ${{ secrets.RE_API_TOKEN }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.9.19
+
+    - name: Pip installation
+      run: python -m pip install --upgrade pip poetry
+
+    - name: Poetry installation
+      run: poetry install
+
+    - name: Run unit tests
+      run: scripts/run_unit_tests
+
+    - name: Run integration tests
+      run: |
+        echo "WORKSPACE_TOKEN=$WORKSPACE_TOKEN" > .env
+        echo "RE_API_TOKEN=$RE_API_TOKEN" >> .env
+        scripts/run_integration_tests
+
+    - name: Print Docker Compose logs
+      if: failure()
+      run: docker compose logs
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        fail_ci_if_error: true

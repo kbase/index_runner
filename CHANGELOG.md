@@ -6,8 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.21] - 2022-08-28
+
+### Added
+- Configuration parameter to disable elastic indexing
+- Mimimal configuration file for an RE only indexer
+
+## [1.9.20] - 2022-06-15
+
+### Added
+- Configuration parameter for max objects in a workspace to skip narrative reindex
+- Configuration option to skip narrative reindex for certain workspaces
+- Configuration option for poll timeout
+- Configuration option to skip narrative reindexing
+
+## [1.9.19] - 2021-04-19
+
 ### Fixed
 - Fixing Samples Releng indexer to work with RE api time-travel.
+- Added prefix to default_search alias
+- Removed reads_1 from reads alias
+- Removed pangenome_orthologfamily from default_search
 
 ### Added
 - adding narrative_config.yaml spec file for separating narrative indexing.

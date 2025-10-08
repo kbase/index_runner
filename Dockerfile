@@ -1,10 +1,11 @@
-FROM python:3.7-alpine
+FROM python:3.9.19-alpine
 
 # Dockerize related args
 ARG BUILD_DATE
 ARG VCS_REF
 ARG BRANCH=develop
 ENV DOCKERIZE_VERSION v0.6.1
+ENV CRYPTOGRAPHY_DONT_BUILD_RUST 1
 
 # Install dockerize
 RUN apk --update add --virtual deps curl tar gzip && \
@@ -24,14 +25,21 @@ LABEL org.label-schema.build-date=$BUILD_DATE \
 WORKDIR /app
 
 # Dependency for confluent-kafka
-RUN apk --update add librdkafka librdkafka-dev && ldconfig /usr/lib
+RUN apk --update add build-base git cmake bash
+RUN git clone --branch v2.6.1 https://github.com/confluentinc/librdkafka.git /tmp/librdkafka
+RUN cd /tmp/librdkafka && \
+    ./configure && \
+    make && \
+    make install && \
+    ldconfig /usr/lib
+RUN rm -rf /tmp/librdkafka
 
 # Install dependencies
 COPY pyproject.toml poetry.lock /app/
-RUN apk --update add --virtual deps python3-dev build-base libffi-dev libressl-dev && \
-    pip install --upgrade pip poetry==1.0.9 && \
+RUN apk --update add --virtual deps python3-dev build-base libffi-dev && \
+    pip install --upgrade pip poetry==2.1.2 && \
     poetry config virtualenvs.create false && \
-    poetry install --no-dev --no-interaction --no-ansi && \
+    poetry install --no-root --without dev --no-interaction --no-ansi && \
     apk del deps
 
 # Make the admin tools executable

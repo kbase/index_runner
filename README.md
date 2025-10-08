@@ -10,13 +10,27 @@ sure to partition the topic to at least the number of running workers.
 
 ## Development
 
+### Dependencies
+
+Note that `docker-compose` 2.3+ is required to run the tests.
+
+In this project, python packages and dependencies are managed using poetry. To
+install the development dependencies, create and activate a python virtual
+environment and then run the `poetry install` command.
+
+### Running the tests
+
 Start the servers:
 
 ```sh
 docker-compose up
 ```
 
-Run the tests (servers need not be running, and will be shut down if they are):
+To run all the tests the `RE_API_TOKEN` and `WORKSPACE_TOKEN` environment
+variables must be set to admin tokens for the relation engine and workspace,
+respectively. This project is set up to read a `.env` file, so they may be set
+there. The following command will run the tests (servers need not be running,
+and will be shut down if they are):
 
 ```sh
 scripts/run_tests
@@ -45,6 +59,8 @@ You can set the following env vars:
 * `SKIP_RELENG` - skip imports into the relation engine (ArangoDB)
 * `SKIP_FEATURES` - skip any importing or indexing of genome features
 * `SKIP_INDICES` - comma-separated list of index names that the service will not write into.
+* `SKIP_WORKSPACES` - comma-separated list of workspaces that should be skipped
+* `MAX_OBJECT_REINDEX` - If the number of objects in the workspace are greater than this value, then the narrative object will not automatically be reindexed.
 * `ELASTICSEARCH_HOST` - host name of the elasticsearch server to use (do not prepend protocol)
 * `ELASTICSEARCH_PORT` - port to use for the elasticsearch server
 * `KBASE_ENDPOINT` - URL of kbase API services (default is "https://ci.kbase.us/services")
@@ -80,7 +96,7 @@ Examples:
 
 Show command help: `indexer_admin -h`
 
-_Reindex a specific object_ 
+_Reindex a specific object_
 
 ```sh
 # Reindex only if the doc does not exist
@@ -143,7 +159,7 @@ First, increment the versions found in `VERSION` and in `pyproject.toml`.
 
 Then, build the image and push to docker hub with `scripts/docker_deploy`.
 
-### Project anatomy
+### Project Anatomy
 
 * The main process and entrypoint for the app lives in `./src/index_runner/main.py`
 * The entrypoint for ES indexing is in `./src/index_runner/es_indexer.py`

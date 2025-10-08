@@ -15,15 +15,17 @@ def init_consumer(topics: List[str]) -> Consumer:
     """
     Initialize a Kafka consumer instance
     """
+    conf = config()
     consumer = Consumer({
-        'bootstrap.servers': config()['kafka_server'],
-        'group.id': config()['kafka_clientgroup'],
+        'bootstrap.servers': conf['kafka_server'],
+        'group.id': conf['kafka_clientgroup'],
         'auto.offset.reset': 'earliest',
+        'max.poll.interval.ms': conf['poll_timeout'],
         'enable.auto.commit': False
     })
     logger.info(f"Subscribing to: {topics}")
-    logger.info(f"Client group: {config()['kafka_clientgroup']}")
-    logger.info(f"Kafka server: {config()['kafka_server']}")
+    logger.info(f"Client group: {conf['kafka_clientgroup']}")
+    logger.info(f"Kafka server: {conf['kafka_server']}")
     consumer.subscribe(topics)
     return consumer
 

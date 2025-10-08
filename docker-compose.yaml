@@ -1,6 +1,7 @@
-version: '3'
-
 # This docker-compose is for developer convenience, not for running in production.
+
+# Uncomment platform: linux/amd64 if you get a "no matching manifest for linux/arm64/v8 in the manifest list entries" error
+# when running Docker Compose
 
 services:
 
@@ -56,6 +57,7 @@ services:
 
   elasticsearch:
     image: elasticsearch:7.5.0
+    # platform: linux/amd64
     environment:
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
       - bootstrap.memory_lock=true
@@ -85,6 +87,7 @@ services:
   # Arangodb server in cluster mode
   arangodb:
     image: arangodb:3.5
+    # platform: linux/amd64
     ports:
       - "127.0.0.1:8529:8529"  # API
       - "127.0.0.1:8530:8530"  # dashboard
